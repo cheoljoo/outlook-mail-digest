@@ -31,6 +31,12 @@
     - [CSV 파일을 엑셀로 열었더니 한글이 깨져요](#csv-파일을-엑셀로-열었더니-한글이-깨져요)
     - [아무 파일도 안 만들어지고 창이 바로 닫혀요](#아무-파일도-안-만들어지고-창이-바로-닫혀요)
   - [12. 설정값 바꾸는 방법 (요약표)](#12-설정값-바꾸는-방법-요약표)
+  - [13. 실제 시도 기록 및 트러블슈팅 결과 (2026-07-27)](#13-실제-시도-기록-및-트러블슈팅-결과-2026-07-27)
+    - [13-1. 실행 시도 (uv 사용)](#13-1-실행-시도-uv-사용)
+    - [13-2. 원인 분석: 새 Outlook(olk.exe)은 COM 자동화 미지원](#13-2-원인-분석-새-outlookolkexe은-com-자동화-미지원)
+    - [13-3. 클래식 Outlook 설치 시도](#13-3-클래식-outlook-설치-시도)
+    - [13-4. 클래식 Outlook 실행 실패](#13-4-클래식-outlook-실행-실패)
+    - [13-5. 결론 및 재시도 전 필수 확인 사항](#13-5-결론-및-재시도-전-필수-확인-사항)
 
 ---
 
@@ -310,3 +316,67 @@ CSV 파일을 Linux 서버(hermes)나 다른 Python 프로그램에서 활용하
 | `OUTPUT_DIR` | 바탕화면의 `OutlookExtract` 폴더 | 결과 CSV 파일이 저장될 위치 |
 
 수정 후에는 메모장에서 저장(`Ctrl+S`)하고, `run.bat`을 다시 더블클릭하면 새 설정으로 실행됩니다.
+
+---
+
+## 13. 실제 시도 기록 및 트러블슈팅 결과 (2026-07-27)
+
+> 이 회사 PC 환경에서 실제로 시도했던 내용과 결과를 기록합니다. **동일한 회사 보안 환경에서는 아래 결론을 먼저 확인한 뒤 재시도 여부를 판단하세요.**
+
+### 13-1. 실행 시도 (uv 사용)
+
+이 저장소에서는 `pip install` 대신 `uv`로 의존성을 관리합니다 (`pyproject.toml`에 `pywin32` 명시).
+
+```powershell
+cd d:\code\outlook-mail-digest
+uv run extract_outlook.py
+```
+
+결과: 아래 오류로 실패했습니다.
+
+```
+pywintypes.com_error: (-2147221005, '잘못된 클래스 문자열입니다.', None, None)
+  ...
+  outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+```
+
+### 13-2. 원인 분석: 새 Outlook(olk.exe)은 COM 자동화 미지원
+
+- 실행 중이던 프로세스 확인 결과 `olk.exe` (`C:\Program Files\WindowsApps\Microsoft.OutlookForWindows_...`) → **새 Outlook(Microsoft Store/MSIX 앱)** 이 실행 중이었음.
+- 레지스트리에 `Outlook.Application` COM ProgID가 등록되어 있지 않았음.
+- Windows 설정 → 앱 → 설치된 앱 → Outlook 확인 결과: 버전 `1.2026.713.100`, 앱 용량 `0바이트`/데이터만 `258KB` → MSIX(Store) 패키지의 전형적 특징으로 확인.
+- `C:\Program Files\Microsoft Office`, `C:\Program Files (x86)\Microsoft Office` 어디에도 클래식 `OUTLOOK.EXE`가 없었음.
+- **결론:** 새 Outlook은 `Outlook.Application` COM 자동화 인터페이스를 지원하지 않으므로, 이 문서/스크립트 방식은 새 Outlook만 설치된 PC에서는 동작하지 않음. 클래식 Outlook 데스크톱 앱이 반드시 필요함.
+
+### 13-3. 클래식 Outlook 설치 시도
+
+- https://support.microsoft.com/en-us/outlook/install-or-reinstall-classic-outlook-on-a-windows-pc 안내에 따라 클래식 Outlook 설치 진행.
+- 설치 자체는 **성공**:
+  - `C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE` 파일 생성됨.
+  - 레지스트리에 `Outlook.Application` → CLSID `{0006F03A-0000-0000-C000-000000000046}` 로 정상 등록됨.
+  - 이벤트 로그(`MsiInstaller`)에서도 `Office 16 Click-to-Run Extensibility/Localization Component` 설치 성공 기록 확인.
+
+### 13-4. 클래식 Outlook 실행 실패
+
+설치는 성공했지만, 실행 단계에서 막혔습니다.
+
+- 터미널에서 직접 실행 시도:
+  ```powershell
+  Start-Process "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"
+  ```
+  → `액세스가 거부되었습니다` 오류 발생.
+- 시작 메뉴 → "Outlook (classic)" → **"관리자 권한으로 실행"** 클릭 → **아무 반응 없음** (UAC 창도, 커서 로딩도, 창도 뜨지 않음. 프로세스 목록에도 `OUTLOOK.EXE`가 나타나지 않음).
+- 진단을 위해 확인한 이벤트 로그:
+  - `Microsoft-Windows-AppLocker/EXE and DLL`: 관련 차단 기록 없음.
+  - `Microsoft-Windows-Windows Defender/Operational` (ID 1116/1117): 관련 탐지 기록 없음.
+  - `Application` 로그: Office 설치 관련 정상 로그만 존재, 실행 실패에 대한 오류 없음.
+  - `Microsoft-Windows-CodeIntegrity/Operational`: 직접적인 Outlook 차단 기록은 없었으나, **`Privacy-i`(`PIProtectorAPI64.dll`), `VD-i`(`vdguardAPI64.dll`) 같은 사내 DLP/보안 에이전트가 Chrome·Whale 등 다른 프로세스에 지속적으로 개입하고 있는 정황**을 확인함.
+- **추정 원인:** 이 PC는 사내 DLP/보안 에이전트(Privacy-i, VD-i 등)로 관리되는 환경이며, 클래식 Outlook(새로 설치된 실행 파일) 실행이 이 보안 에이전트에 의해 **이벤트 로그에 남기지 않고 조용히 차단**되고 있을 가능성이 높음.
+
+### 13-5. 결론 및 재시도 전 필수 확인 사항
+
+- 이 PC 환경에서는 클래식 Outlook을 **설치는 할 수 있으나 실행은 되지 않는** 상태로 확인됨.
+- **동일한 환경에서 재시도해도 같은 이유로 실패할 가능성이 높으므로, 재시도하기 전에 반드시 사내 IT/보안팀에 먼저 문의할 것:**
+  > "새 Outlook(olk.exe)만 정상 동작하고, 클래식 Outlook(OUTLOOK.EXE)은 설치는 되지만 실행되지 않습니다. Privacy-i/VD-i 등 보안 에이전트가 차단하고 있는지, 클래식 Outlook 실행이 회사 정책상 허용되는지 확인 부탁드립니다."
+- IT 확인 결과 클래식 Outlook 실행이 정책상 차단된 것으로 판명되면, `pywin32` + `Outlook.Application` COM 방식(이 문서의 방식) 자체가 이 회사 환경에서는 사용 불가능하다는 뜻이므로, **Microsoft Graph API 기반 방식**(회사의 앱 등록/승인 필요) 등 대안 검토가 필요함.
+- 보안 통제(DLP/보안 에이전트)를 임의로 우회하거나 비활성화하려는 시도는 하지 않았으며, 앞으로도 권장하지 않음.
