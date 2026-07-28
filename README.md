@@ -18,6 +18,7 @@ flowchart LR
 
 - **클라우드 단계 (자동)**: Power Automate가 메일 도착을 감지해 Excel과 첨부파일을 OneDrive에 저장합니다. Outlook이나 PC가 꺼져 있어도 동작합니다.
 - **PC 단계 (최초 1회 설정 후 자동)**: OneDrive 동기화 + Windows 작업 스케줄러가 주기적으로 `tiger02.lge.com` 서버로 파일을 전달합니다.
+  - **아직 시간이 없어 시험 / 확인은 하지 못함. 디자인과 코드만 있음**
 - 각 구성 요소의 자세한 원리는 [my_outlook_power_automate_setup.md](my_outlook_power_automate_setup.md) 1절 참고.
 
 ## 🚀 Getting Started (처음 시작하기)
@@ -61,6 +62,7 @@ run.bat
 
 1. Power Automate 흐름 화면에서 **"Test" → "Manually" → "Test"** 클릭
 2. 자기 자신에게 **첨부파일을 하나 붙여서** 테스트 메일 발송
+   - ⚠️ 이 흐름은 **받은편지함(Inbox)에 도착한 메일만** 감지합니다. 스팸함(Junk Email)으로 자동 분류되거나, Outlook 규칙(rule)이 도착 즉시 다른 폴더로 이동시키는 메일은 Inbox를 거치지 않으므로 처리되지 않습니다. 테스트 메일이 필터링 규칙 없이 Inbox에 그대로 남는지 확인하세요.
 3. 잠시 후 Power Automate에서 흐름 실행이 초록색 체크(성공)로 표시되는지 확인
 4. OneDrive의 `OutlookDigest.xlsx`를 열어 새 행이 추가됐는지 확인 (받은시각/보낸사람/제목/본문/받는사람/첨부파일명 모두 채워져야 함)
 5. OneDrive의 `OutlookAttachments` 폴더에 실제 첨부파일이 저장됐는지, 그 파일 이름이 Excel "첨부파일명" 열 값과 **글자 하나까지 정확히 일치**하는지 확인
