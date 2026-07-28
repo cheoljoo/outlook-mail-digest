@@ -280,6 +280,8 @@ Excel의 "첨부파일명" 열에 **실제로 OneDrive에 저장된 파일 이�
 | "Add a row into a table"이 Excel에 첨부파일 개수만큼 중복된 줄을 만듦 | "Add a row into a table" 액션을 "Apply to each" 박스 **안**에 넣은 경우입니다. 4-3절처럼 반드시 박스 **바깥(다음)** 으로 옮기세요 |
 | 흐름 저장 시 `InvalidTemplate ... The repetition action(s) 'Apply_to_each' referenced by 'inputs' in action 'Compose' are not defined in the template` 오류 | "Apply to each" 박스의 실제 제목(예: `Apply to each 1`)과 Compose 수식 안에서 참조한 이름(`Apply_to_each`)이 서로 다른 경우입니다. 흐름 안에 "Apply to each"가 하나뿐이라면, 박스 제목의 이름을 클릭해서 숫자 없이 **`Apply to each`** 로 바꾸는 것이 가장 간단한 해결책입니다 (문서의 Compose 수식과 정확히 일치하게 됨) |
 | 흐름을 Import한 동료가 실행했는데 계속 원작성자(나)의 메일함/OneDrive만 감시함 | Import 시 각 Connection을 "Create new"로 본인 계정으로 새로 연결하지 않고 그대로 진행한 경우입니다. 9-1절대로 Import 화면에서 각 연결마다 "Select during import" → "Create new" → 본인 계정 로그인을 반드시 거쳐야 합니다 |
+| 회사 Power Automate에서 Import(패키지 가져오기) 자체가 안 되거나 오류가 남 | 조직 정책상 Import 기능 자체가 차단된 것입니다. 9-2절의 "공유(Share) + 작업 복사/붙여넣기(Copy action/Paste action)" 방식을 대신 사용하세요. 이 방식은 Import 기능을 전혀 쓰지 않으므로 이 정책의 영향을 받지 않습니다 |
+| 9-2절 방식으로 붙여넣은 뒤 저장 시 `InvalidTemplate ... The repetition action(s) 'Apply_to_each' referenced by 'inputs' in action 'Compose' are not defined in the template` 오류 | "Paste action" 직후 자동으로 붙는 `-copy` 접미사(`Apply to each-copy`, `Compose-copy`) 때문입니다. 9-2절 4)번 안내대로 붙여넣은 박스 이름에서 `-copy`를 지워 정확히 `Apply to each`, `Compose`로 되돌리세요 |
 | "Get file metadata using path" 단계가 빨간 X(실패)로 표시됨 | 4-0절에서는 **이 실패가 정상**입니다 (`OutlookDigest.xlsx` 파일이 이미 있다는 뜻). 다음 단계를 클릭 → "Settings" 탭 → "Run after" 섹션에 "Has failed"/"Is skipped"가 체크되어 있는지 확인하세요. 전체 흐름의 마지막 결과가 초록색 체크면 문제 없습니다 |
 | OneDrive for Business 커넥터의 "Add an action" 목록에 "Create new folder"가 없음 | 정상입니다. 이 커넥터에는 폴더 생성 전용 액션이 없습니다. 4-0절 안내대로 `OutlookAttachments` 폴더는 4-2절의 "Create file"이 그 경로로 처음 저장할 때 자동 생성됩니다 (자동 생성이 안 되는 것을 확인하면 3단계 7번처럼 한 번만 수동으로 만들어 두세요) |
 
@@ -287,9 +289,18 @@ Excel의 "첨부파일명" 열에 **실제로 OneDrive에 저장된 파일 이�
 
 ## 9. 다른 사람도 그대로 가져다 쓸 수 있게 만들기
 
-지금까지 만든 흐름을 동료도 자기 메일함/OneDrive 기준으로 그대로 쓰게 하려면 **흐름 자체를 공유**하기만 하면 됩니다. Excel 파일(Table1 포함) 자동 준비와 첨부파일 폴더 자동 생성은 이미 4-0절에서 흐름 안에 포함시켰으므로, 동료는 Import 한 번만으로 나머지가 전부 자동으로 준비됩니다.
+지금까지 만든 흐름을 동료도 자기 메일함/OneDrive 기준으로 그대로 쓰게 하려면, 아래 두 방법 중 하나를 쓰면 됩니다. Excel 파일(Table1 포함) 자동 준비와 첨부파일 폴더 자동 생성은 이미 4-0절에서 흐름 안에 포함시켰으므로, 어느 방법을 쓰든 동료는 최소한의 수작업만으로 나머지가 전부 자동으로 준비됩니다.
 
-### 9-1. 흐름을 "패키지"로 내보내서 동료에게 전달하기
+| | 방법 A: 내보내기(Export) → 가져오기(Import) | 방법 B: 공유(Share) + 작업 복사/붙여넣기(Copy action/Paste action) |
+|---|---|---|
+| 전제 조건 | 조직에서 흐름 **Import**(패키지 가져오기)가 막혀 있지 않아야 함 | **Import가 막혀 있어도 사용 가능** (Import 기능 자체를 아예 쓰지 않음) |
+| 동료가 할 일 | zip 파일 하나만 Import | 새 흐름을 직접 만들고, 원본 흐름에서 액션을 몇 개 묶어서 복사 → 붙여넣기 |
+| 소요 시간 | 짧음 (1~2분) | 조금 더 걸림 (5~10분, 액션 묶음 4개 정도 복사/붙여넣기) |
+| 언제 쓰나 | 조직에서 Import가 허용될 때 | **회사 정책상 Import 자체가 차단된 경우** (이 문서의 기본 시나리오) |
+
+> ⚠️ 이 회사(테넌트)처럼 **Import가 막혀 있다면 방법 A(9-1)는 시도해도 실패**하므로, 바로 **방법 B(9-2)** 로 진행하세요. Power Automate 디자이너의 "Copy action"/"Paste action" 기능은 같은 흐름 안에서뿐 아니라 **서로 다른 흐름 사이에서도** 공식적으로 지원되며([Microsoft Learn: 클라우드 흐름 디자이너](https://learn.microsoft.com/power-automate/flows-designer) "복사 및 붙여넣기 작업" 절 참고), Import(패키지 가져오기)와는 완전히 다른 기능이라 조직의 Import 차단 정책에 걸리지 않습니다.
+
+### 9-1. 방법 A: 흐름을 "패키지"로 내보내서 동료에게 전달하기 (Import가 가능한 경우)
 
 Power Automate의 "Share" 기능으로 흐름을 같이 소유하게 할 수도 있지만, 그렇게 하면 트리거가 여전히 **원작성자(이 흐름을 처음 만든 사람, 예: 이철주)의 메일함만** 감시합니다. 동료가 **자기 메일함**을 감시하는 자기만의 흐름을 가지려면 반드시 **내보내기(Export) → 가져오기(Import)** 방식을 써야 합니다.
 
@@ -312,9 +323,33 @@ Power Automate의 "Share" 기능으로 흐름을 같이 소유하게 할 수도 
 5. **"Import"** 클릭 → 완료되면 동료의 "My flows" 목록에 흐름이 생기고 자동으로 **켜짐(On)** 상태가 됩니다.
 6. 4-0절의 자동 준비 로직이 흐름 안에 이미 포함되어 있으므로, 동료는 Excel 파일이나 첨부파일 폴더를 따로 만들 필요가 없습니다.
 
-### 9-2. 최종 확인
+### 9-2. 방법 B: 공유(Share) + 작업 복사/붙여넣기로 동료의 흐름 만들기 (Import가 차단된 경우)
 
-1. 4-0절까지 모두 반영한 뒤 **"Test" → "Manually"**로 한 번 실행합니다.
+Import 기능 자체를 전혀 쓰지 않고, Power Automate 디자이너의 **"Copy action" / "Paste action"** 기능을 이용해 동료가 자기 흐름을 직접 조립하는 방법입니다. 이 기능은 같은 흐름 안에서는 물론 **서로 다른 흐름 사이**에서도 액션(원자적 액션이든 "Apply to each" 같은 컨테이너 액션이든)을 복사해서 붙여넣을 수 있도록 공식적으로 지원되며, Import가 막혀 있어도 그대로 동작합니다. "Share"로 흐름을 열람/편집할 수 있게만 공유하면 됩니다.
+
+**1) 내가 할 일: 원본 흐름을 동료에게 공유**
+
+1. `https://make.powerautomate.com` → **"My flows"** → 이 흐름 오른쪽 점 3개(`...`) → **"Share"**
+2. 공유 화면의 **"Owners"**(또는 공유 대상 입력란)에 동료의 이름/이메일 추가 → 저장
+   - ⚠️ 이렇게 공유해도 트리거는 여전히 **내(원작성자) 메일함만** 감시합니다. 이 공유의 목적은 어디까지나 동료가 원본 흐름의 내용을 열람하고 액션을 복사할 수 있게 하기 위함이며, 동료가 실제로 쓸 흐름은 아래 2)에서 새로 만드는 흐름입니다.
+
+**2) 동료가 할 일: 자기만의 새 흐름을 만들고, 원본에서 액션을 복사해서 붙여넣기**
+
+1. 먼저 **자기 흐름을 새로 생성**: `"Create"` → `"Automated cloud flow"` → 트리거 검색 `When a new email arrives` → **"Office 365 Outlook - When a new email arrives (V3)"** 선택 → **본인 계정**으로 트리거 연결 (4절 1~5번과 동일하게 폴더/첨부 파일 포함 여부까지 설정)
+2. 공유받은 원본 흐름을 별도 브라우저 탭에서 열기 (`My flows` 목록의 **"Shared with me"** 탭 또는 유사한 탭에 표시됨)
+3. 원본 흐름에서 **위에서부터 순서대로** 아래 단위로 하나씩 복사합니다. 복사할 액션을 마우스 오른쪽 버튼으로 클릭 → **"Copy action"** (또는 액션 선택 후 `Ctrl+C`) → 자신의 새 흐름 탭으로 이동 → 붙여넣을 위치의 캔버스 **"+"** 를 마우스 오른쪽 버튼으로 클릭 → **"Paste action"** (또는 `Ctrl+V`)
+   - ① §4-0의 "Get file metadata using path" ~ "Create file" (파일 자동 준비 로직, 필요하면)
+   - ② §4-1의 "Initialize variable" (`varAttachmentNames`)
+   - ③ §4-2의 **"Apply to each" 박스 전체** — 컨테이너 액션이므로 이것 하나를 복사하면 안에 있는 `Compose`/`Create file`/`Append to array variable`까지 통째로 복사됩니다.
+   - ④ §4-3의 "Add a row into a table"
+4. ⚠️ **매우 중요 (이름 확인)**: 붙여넣은 직후 액션 이름 뒤에 자동으로 **`-copy`** 가 붙습니다 (예: `Apply to each` → `Apply to each-copy`, `Compose` → `Compose-copy`). 이 프로젝트의 수식(`items('Apply_to_each')`, `outputs('Compose')`)은 정확히 `Apply to each`, `Compose`라는 이름을 전제로 하므로, 붙여넣은 뒤 **박스 이름을 클릭해서 `-copy`를 지우고 원래 이름(`Apply to each`, `Compose`)으로 되돌리세요.** 그렇지 않으면 저장 시 8절 문제 해결 표에 있는 것과 동일한 `InvalidTemplate ... referenced by 'inputs' ... are not defined in the template` 오류가 납니다.
+5. **연결(Connection) 다시 설정**: 붙여넣은 `OneDrive for Business`/`Excel Online (Business)`/`Office 365 Outlook` 액션은 원본 소유자(나)의 연결을 그대로 참조하려고 시도할 수 있습니다. 액션을 클릭했을 때 "Invalid connection" 경고나 연결 선택 드롭다운이 보이면, 반드시 **동료 자신의 계정으로 새 연결(Create new)** 을 만들어 선택하세요. (같은 커넥터를 한 번만 새로 연결하면, 같은 커넥터를 쓰는 다른 액션들도 자동으로 그 연결을 같이 쓰게 됩니다.)
+6. 순서(위→아래)가 원본과 같은지, 트리거 바로 다음부터 §4-0 → §4-1 → §4-2("Apply to each") → §4-3("Add a row into a table") 순서로 이어지는지 확인
+7. **저장** → 저장 시 오류(빨간 X)가 나면 대부분 4)~5)의 이름/연결 문제이므로 8절 문제 해결 표를 같이 참고하세요.
+
+### 9-3. 최종 확인 (두 방법 공통)
+
+1. 어느 방법으로 만들었든 **"Test" → "Manually"**로 한 번 실행합니다.
 2. 실행 결과에서 "Get file metadata using path"나 "Create new folder"가 빨간 X로 나와도, **전체 흐름이 초록색 체크로 끝나는지** 확인합니다 (run after 설정이 제대로 됐다는 뜻).
-3. `OutlookDigest.xlsx`, `OutlookAttachments` 폴더가 실제로 내 OneDrive에 자동 생성됐는지 확인합니다.
-4. 이 상태로 9-1의 방법으로 zip을 내보내면, 동료는 **Import 한 번만으로** 자기 메일함 → 자기 OneDrive의 Excel/첨부파일 폴더까지 전부 자동으로 준비됩니다.
+3. `OutlookDigest.xlsx`, `OutlookAttachments` 폴더가 실제로 동료 자신의 OneDrive에 자동 생성됐는지 확인합니다.
+4. 방법 A(9-1)를 쓸 수 있는 조직이라면 그 zip을 그대로 재활용하면 되고, 방법 B(9-2)로 진행했다면 이렇게 완성한 동료의 흐름을 그 다음 사람에게 전달할 때도 똑같이 9-2 절차(공유 → 액션 복사/붙여넣기)를 반복하면 됩니다.
