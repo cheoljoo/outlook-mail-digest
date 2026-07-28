@@ -89,10 +89,12 @@ run.bat
 | [outlook_power_automate_setup.en.md](outlook_power_automate_setup.en.md) | 위 문서와 내용/구성은 동일하지만, 실제 OneDrive·Power Automate UI가 영문이라 버튼/메뉴 이름을 영문 그대로 표기한 버전. |
 | [my_outlook_power_automate_setup.md](my_outlook_power_automate_setup.md) | **실제로 이 프로젝트에서 쓰고 있는 개인화된 작업 버전.** 실제 서버(`tiger02.lge.com`), 실제 스크립트(`sync_outlook_digest.py`, `run.bat`) 경로가 그대로 들어가 있고, 시도했다가 안 된 방법(rclone 관리자 승인 차단 등)과 실제 겪은 트러블슈팅이 함께 기록된 **살아있는 문서**. 설정을 바꾸거나 재현할 때는 이 문서를 기준으로 봅니다. 0절 "빠른 시작"에서 아래 zip 파일을 바로 가져와 쓰는 방법도 안내합니다. |
 
-## 자동화 스크립트
+## 전 과정 자동화 스크립트
 
-- [sync_outlook_digest.py](sync_outlook_digest.py) — OneDrive에 동기화된 `OutlookDigest.xlsx`를 SSH 키 인증으로 원격 서버(tiger02)에 전송. SSH 키 생성/서버 등록, Windows 작업 스케줄러 등록 여부를 스스로 확인해 필요할 때만 처리(idempotent). 모든 단계를 `sync_outlook_digest.log`에 시간과 함께 기록.
-- [run.bat](run.bat) — `uv`가 없으면 설치한 뒤 `uv run sync_outlook_digest.py` 실행. Windows 작업 스케줄러에 이 파일을 등록해 주기적으로 돌림.
-- [extract_outlook.py](extract_outlook.py) — (폐기된 방식) 클래식 Outlook COM 자동화로 로컬에서 직접 추출하던 스크립트. 참고용으로 보존.
+- 디자인상 명확하지는 않습니다. 현재는 linux system으로 파일을 올리는 것으로 생각했었습니다. 실제로 작업을 하는 것은 그냥 Windows에서 바로 동작시켜 jira에 ticket을 만드는 것 입니다.
+- 기타
+  - [sync_outlook_digest.py](sync_outlook_digest.py) — OneDrive에 동기화된 `OutlookDigest.xlsx`를 SSH 키 인증으로 원격 서버(tiger02)에 전송. SSH 키 생성/서버 등록, Windows 작업 스케줄러 등록 여부를 스스로 확인해 필요할 때만 처리(idempotent). 모든 단계를 `sync_outlook_digest.log`에 시간과 함께 기록.
+  - [run.bat](run.bat) — `uv`가 없으면 설치한 뒤 `uv run sync_outlook_digest.py` 실행. Windows 작업 스케줄러에 이 파일을 등록해 주기적으로 돌림.
+  - [extract_outlook.py](extract_outlook.py) — (폐기된 방식) 클래식 Outlook COM 자동화로 로컬에서 직접 추출하던 스크립트. 참고용으로 보존.
 
 Licensed under the Apache License, Version 2.0.
