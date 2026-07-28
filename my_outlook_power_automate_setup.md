@@ -5,7 +5,25 @@
 > Power Automate "흐름(Flow)"이 메일 내용을 OneDrive의 Excel 표에 자동으로 한 줄씩 추가합니다.
 > Azure AD 앱 등록이나 관리자 동의가 필요 없는 **기본(무료) 커넥터만** 사용합니다.
 > **상태: 2026-07-28 기준 아래 절차 전부 실제로 동작 확인 완료** (Power Automate 흐름 → 첨부파일 포함 Excel 자동 기록 → OneDrive 동기화 → Windows 작업 스케줄러로 tiger02 서버 전달).
-> 이 문서는 처음부터 **받는사람(To) / 첨부파일까지 포함**해서 흐름을 만드는 순서로 정리되어 있습니다. 첨부파일이 필요 없다면 4-2, 4-4 단계만 건너뛰면 됩니다.
+> 이 문서는 처음부터 **받는사람(To) / 첨부파일까지 포함**해서 흐름을 만드는 순서로 정리되어 있습니다. 첨부파일이 필요 없다면 4-1, 4-2 단계는 건너뛰고 4-3의 첨부파일명 칸만 비워두면 됩니다.
+
+---
+
+## 0. 빠른 시작 (이미 만들어진 흐름을 그대로 가져오기)
+
+1~9절을 처음부터 따라 하며 직접 만들 필요 없이, 이미 완성해서 내보낸 흐름 파일 [Get_Outlook_Mail_20260728014316.zip](Get_Outlook_Mail_20260728014316.zip)을 이 저장소에서 바로 가져올 수 있습니다 (2026-07-28 기준 실제 동작 확인 완료된 버전입니다). 자기 메일함/OneDrive로 그대로 동작하게 하려면 아래 순서를 그대로 따르세요.
+
+1. `https://make.powerautomate.com` 접속 → 왼쪽 메뉴 **"My flows"** → **"Import"**
+2. 이 저장소의 [Get_Outlook_Mail_20260728014316.zip](Get_Outlook_Mail_20260728014316.zip) 파일을 업로드
+3. 화면에 이 흐름이 쓰는 연결(Connections) 목록이 뜹니다: `Office 365 Outlook`, `Excel Online (Business)`, `OneDrive for Business`
+4. 각 연결 항목 오른쪽에서 **"Select during import"** → **"Create new"** 선택 → 팝업에서 **본인 회사 계정으로 로그인**
+   - ⚠️ 이 단계를 빠뜨리면 흐름이 원작성자(이철주)의 연결을 그대로 재사용하려다 권한 오류가 나거나, 본인이 실행한 흐름인데 **이철주의 메일함을 계속 감시**하게 될 수 있습니다. 반드시 각자 계정으로 새로 연결하세요.
+5. **"Import"** 클릭 → 완료되면 본인의 "My flows" 목록에 흐름이 생기고 자동으로 **켜짐(On)** 상태가 됩니다.
+6. 흐름 안에 이미 포함된 4-0절의 자동 준비 로직 덕분에, 본인 OneDrive에 Excel 파일(`OutlookDigest.xlsx`)과 첨부파일 폴더(`OutlookAttachments`)를 따로 만들 필요가 없습니다. 흐름을 켜는 순간 자동으로 준비됩니다 (첨부파일 폴더는 첫 메일이 도착할 때 생성됨).
+7. **"Test" → "Manually"**로 한 번 실행해 보고, 자신에게 첨부파일 있는 메일을 하나 보내서 `OutlookDigest.xlsx`에 새 행이 생기는지 확인합니다 (5절 "테스트" 참고).
+8. 이렇게 가져온 흐름을 직접 수정하고 싶거나, 동작 원리/각 단계의 의미를 자세히 알고 싶다면 아래 1절부터 순서대로 읽으며 비교하세요. 오류가 나면 8절 "문제 해결" 표를 먼저 확인하세요.
+
+> ℹ️ 이 zip은 §9-1의 "내가 할 일(Export)"을 이미 수행해 둔 결과물입니다. 흐름을 수정한 뒤 새로 내보내려면 §9-1을 참고하세요.
 
 ---
 
@@ -14,11 +32,11 @@
 ```mermaid
 flowchart LR
     A[메일 도착<br/>받은편지함] --> B[Power Automate 흐름<br/>자동 트리거, 24시간 상시 대기]
-    B --> S[Select 액션<br/>첨부파일 이름만 추출]
-    S --> C[Excel Online 표에<br/>한 줄 추가<br/>받는사람/첨부파일명 포함]
-    C --> D[OneDrive의 .xlsx 파일]
-    B --> AT[Apply to each<br/>첨부파일 실제 내용 저장]
+    B --> V[변수 초기화<br/>저장 파일명 배열]
+    V --> AT[Apply to each<br/>Compose로 고유 파일명 계산<br/>Create file로 저장<br/>배열에 이름 추가]
     AT --> OD[OneDrive<br/>OutlookAttachments 폴더]
+    AT --> C[Excel Online 표에<br/>한 줄 추가<br/>첨부파일명 = 실제 저장 이름]
+    C --> D[OneDrive의 .xlsx 파일]
     D --> E[Windows PC에<br/>실시간 동기화]
     E --> F[작업 스케줄러<br/>매시간 scp 전송]
     F --> G[tiger02 서버<br/>~/temp/OutlookDigest.xlsx]
@@ -64,27 +82,87 @@ Power Automate의 "표에 행 추가" 액션은 **미리 만들어진 Excel 표(
 4. 트리거 검색창에 `When a new email arrives` 입력 → **"Office 365 Outlook - When a new email arrives (V3)"** 선택 → **Create**
 5. 트리거 세부 설정:
    - **Folder**: Inbox (필요하면 특정 폴더로 변경)
-   - **Include Attachments**: **Yes** (처음부터 첨부파일까지 저장하는 구성이므로 Yes로 설정합니다. 첨부파일이 전혀 필요 없다면 No로 두고 4-2, 4-4 단계를 건너뛰어도 됩니다.)
+   - **Include Attachments**: **Yes** (처음부터 첨부파일까지 저장하는 구성이므로 Yes로 설정합니다. 첨부파일이 전혀 필요 없다면 No로 두고 4-1, 4-2 단계를 건너뛰어도 됩니다.)
    - 나머지 필터(From, Subject Filter 등)는 선택 사항. 전체 메일을 다 받고 싶으면 비워둡니다.
    - ⚠️ **이 Folder에 실제로 들어온 메일만 잡힙니다.** 스팸함(Junk Email)으로 자동 분류되거나, Outlook 규칙이 도착 즉시 다른 폴더로 이동시키는 메일은 Inbox를 거치지 않으므로 기록되지 않습니다. 반대로 일단 Inbox에 들어온 뒤 사람이 나중에 삭제/이동한 메일은 이미 기록이 끝난 뒤라 영향 없습니다.
 
-### 4-1. 첨부파일 이름만 뽑아내는 "Select" 액션 추가
+### 4-0. OutlookDigest.xlsx / OutlookAttachments 폴더가 없으면 자동으로 준비하기
 
-첨부파일은 배열(여러 개)로 오기 때문에, Excel의 한 칸(문자열)에 넣으려면 이름만 미리 뽑아 콤마로 이어 붙여야 합니다.
-`select(...)`는 Power Automate의 인라인 수식 함수가 아니므로 (Power Apps의 `Select()`와는 다른 개념), 반드시 아래처럼 **별도의 "Select" 액션**을 써야 합니다.
+이 흐름을 다른 사람이 그대로 가져다 써도, 3단계처럼 매번 사람이 직접 Excel 표를 만들거나 폴더를 만들 필요가 없도록 트리거 바로 다음에 "없으면 자동으로 만드는" 단계를 추가합니다. 이미 3단계를 통해 파일/폴더를 만들어 둔 사람에게는 아래 확인 단계들이 전부 실패(빨간 X)로 표시되지만, 그건 "이미 있다"는 뜻이라 **정상**이며 뒤 단계는 그대로 진행됩니다.
 
-1. 트리거 바로 다음에 **"+ New step"** 클릭 → `Select` 검색 → **"Data Operation - Select"** 선택
-2. **From**: 입력칸 클릭 → Dynamic content에서 `Attachments` **클릭**
-3. **Map**: 기본은 `Enter key` / `Enter value` 두 칸으로 된 키-값 모드입니다. 오른쪽의 작은 아이콘(**"Switch to text mode"**)을 클릭해서 입력창 하나로 전환합니다.
-4. 전환된 입력창을 **클릭** → 오른쪽에 뜨는 번개 아이콘(⚡)에서 **"Expression"** 탭 선택 → 아래 수식 입력 → **"Add"**(확인):
-   ```
-   item()?['Name']
-   ```
-   > ⚠️ 이 칸에 `item()?['Name']`를 수식 편집기 없이 **그냥 텍스트로 직접 타이핑**하면 저장할 때 `Enter a valid JSON.` 오류가 납니다. 위처럼 반드시 Expression 편집기를 통해 넣거나, 직접 타이핑해야 한다면 `@{item()?['Name']}` 처럼 `@{ }`로 감싸서 입력하세요.
+**준비 (최초 1회, 이철주가 함)**
 
-### 4-2. "Add a row into a table" 액션 (6개 열 모두 채우기)
+1. 첨부파일 없이 헤더 6개 + `Table1`만 있는 빈 견본 파일을 `OutlookDigest_starting_sample.xlsx`라는 이름으로 준비합니다.
+2. OneDrive에서 이 파일을 우클릭 → **"Share"(공유)** 선택 (실수로 "Manage access"를 눌렀다면 그 패널에서 파란색 **"Start sharing"** 링크를 클릭하면 동일한 화면으로 이동합니다)
+   - "Share" 창 하단의 **"Copy link"** 버튼 바로 오른쪽에 있는 **톱니바퀴(⚙️) 아이콘**을 클릭 → Link settings 창에서 **"People in LG전자"**(사내 전체, 추천) 선택 → **Apply**
+     - 팀원만 지정하고 싶으면 대신 **"People you choose"** 를 선택합니다.
+   - Link settings에서 Apply한 뒤 다시 "Share" 창으로 돌아오면, 이름을 입력하지 말고 **"Copy link"** 버튼만 눌러서 공유를 완료합니다 ("Send"는 이메일로 알림을 보내는 기능이라 필요 없습니다).
+   - 이렇게 공유해두면 다른 사람의 Power Automate 파일 선택창에서 **"Shared"** 항목 아래에 이 파일이 보입니다.
 
-1. `Select` 액션 다음에 **"+ New step"** 클릭 → `Excel Online` 검색 → **"Excel Online (Business) - Add a row into a table"** 선택
+**흐름에 추가할 단계 (트리거 바로 다음, 4-1 "Initialize variable" 액션보다 앞)**
+
+> ⚠️ OneDrive for Business 커넥터에는 **"Create new folder"라는 액션 자체가 없습니다** ("Add an action" 목록에 Create file/Copy file/Get file 계열만 있고 폴더 생성 액션은 없음). 대신 `OutlookAttachments` 폴더는 **4-2절의 "Create file"이 그 폴더 경로로 처음 저장을 시도할 때 없으면 자동으로 만들어집니다** (SharePoint/OneDrive 계열 "Create file" 액션의 공통 동작: 대상 Folder Path가 없으면 자동 생성). 그래서 여기서는 `OutlookDigest.xlsx` 파일 준비만 다루면 됩니다.
+
+1. **"+ New step"** → `OneDrive for Business` 검색 → **"Get file metadata using path"** 선택
+   - **File Path**: `/OutlookDigest.xlsx`
+   - 흐름의 첫 단계이므로 "Run after" 설정은 건드릴 필요 없습니다 (기본값 그대로).
+   - 내 OneDrive에 파일이 이미 있는지만 확인하는 단계입니다. 파일이 없으면 이 단계는 실패(빨간 X)합니다. 정상입니다.
+2. 그 다음 **"+ New step"** → `OneDrive for Business` 검색 → **"Get file content"** 선택
+   - 파일 선택창에서 **"Shared"** 항목 아래, 이철주가 공유한 `OutlookDigest_starting_sample.xlsx` 선택
+   - 이 액션을 클릭해서 선택한 상태에서 왼쪽 패널의 **"Settings"** 탭 클릭 → **"Run after"** 섹션에 바로 앞 액션("Get file metadata using path")이 이미 나열되어 있음 → 그 옆의 **상태 점(●) 아이콘** 클릭 → 체크박스 펼쳐짐 → **"Is successful"** 체크 해제, **"Has failed"** 만 체크 (즉, 1번이 실패했을 때 = 내 OneDrive에 파일이 없을 때만 이 단계가 실행됨. 별도 저장 버튼 없이 바로 적용됨)
+3. 캔버스에서 방금 만든 **"Get file content"** 박스 바로 아래의 **"+"** 아이콘 클릭 → `OneDrive for Business` 검색 → **"Create file"** 선택
+   - **Folder Path**: `/`
+   - **File Name**: `OutlookDigest.xlsx`
+   - **File Content**: 2번 단계("Get file content")의 출력(File Content) 클릭
+   - "Run after" 설정은 기본값(2번이 성공했을 때) 그대로 둡니다.
+
+> ℹ️ 바로 다음 §4-1에서 "Initialize variable" 액션을 만든 뒤, 그 액션의 "Run after"를 이 "Create file"(3번)에 맞춰 마저 설정해야 합니다 (§4-1 마지막 단계에 안내되어 있습니다). 아직 "Initialize variable" 액션 자체가 없으므로 지금은 건너뜁니다.
+
+동작 순서 요약: **내 OutlookDigest.xlsx 있는지 확인 → 없으면 이철주의 견본 파일을 내 OneDrive로 복사 → (있든 없든) 원래 흐름 그대로 진행 → 4-2절에서 첫 첨부파일을 저장할 때 OutlookAttachments 폴더가 없으면 자동 생성**. 흐름을 처음 켜는 순간 자동으로 자기 OneDrive에 `OutlookDigest.xlsx`가 준비되고, 첫 메일(첨부파일 포함)이 도착하면 `OutlookAttachments` 폴더도 자동 생성되므로, 3단계의 수동 작업을 건너뛰어도 됩니다. (만약 실제로 폴더 자동 생성이 안 되는 것을 확인하면, 3단계 7번처럼 OneDrive에서 `OutlookAttachments` 폴더를 한 번만 수동으로 만들어 두면 됩니다.)
+
+### 4-1. 첨부파일 저장 이름을 모아둘 변수 만들기
+
+Excel의 "첨부파일명" 열에 **실제로 OneDrive에 저장된 파일 이름**을 그대로 기록하려면, 첨부파일마다 반복하며 계산한 고유 이름을 어딘가에 모아뒀다가 나중에(반복이 다 끝난 뒤) Excel에 한 줄로 써야 합니다. 이를 위한 배열 변수를 미리 만듭니다.
+
+1. 트리거 바로 다음에 **"+ New step"** 클릭 → `initial` 검색 → **"Variable"** 카테고리 아래 **"Initialize variable"** 선택 (`Data Operation` 카테고리가 아닙니다)
+2. **Name**: `varAttachmentNames`
+3. **Type**: `Array`
+4. **Value**: 비워둡니다 (Array 타입은 값을 안 넣어도 빈 배열 `[]`로 시작합니다)
+5. **Save**
+6. 이 액션을 클릭 → **"Settings"** 탭 → **"Run after"** 섹션에서 바로 앞의 **"Create file"**(§4-0의 3번)에 대해 **"Is successful"**, **"Has failed"**, **"Is skipped"** 를 모두 체크
+   - 이렇게 해야 "파일이 이미 있어서 §4-0 1번은 성공하고 2, 3번은 건너뛴 경우"와 "파일이 없어서 §4-0 1번은 실패했지만 2, 3번으로 새로 만든 경우" 모두 뒤 이어지는 흐름이 정상 진행됩니다.
+
+### 4-2. "Apply to each" + "Compose" + "Create file" + "Append to array variable" (첨부파일마다 반복 저장)
+
+1. `Initialize variable` 액션 다음에 새 단계 추가: `Control` 검색 → **"Apply to each"** 선택
+   - "Select an output from previous steps" → Dynamic content에서 `Attachments` 클릭
+2. "Apply to each" 안에 첫 액션 추가: `Data Operation` 검색 → **"Compose"** 선택
+   - ⚠️ 아래 수식은 "Apply to each" 박스 제목이 **숫자 없이 정확히 `Apply to each`** 인 것을 전제로 합니다 (새로 만들면 기본적으로 이 이름입니다). 만약 캔버스에 `Apply to each 1`처럼 숫자가 붙어 있다면, 내부 참조 이름도 `Apply_to_each_1`이 되어 아래 수식과 이름이 달라지므로 저장 시 `InvalidTemplate: The repetition action(s) 'Apply_to_each' referenced by 'inputs' in action 'Compose' are not defined in the template.` 오류가 납니다. 이 경우 박스 제목 옆 이름을 클릭해서 `Apply to each`로 바꾸거나(숫자 제거), 수식 안의 `Apply_to_each`를 실제 이름에 맞게 고치세요.
+   - **Inputs** 필드 클릭 → Expression 탭 → 아래 수식 입력:
+     ```
+     concat(substring(items('Apply_to_each')?['Name'], 0, sub(length(items('Apply_to_each')?['Name']), add(length(last(split(items('Apply_to_each')?['Name'], '.'))), 1))), '_', formatDateTime(convertTimeZone(utcNow(), 'UTC', 'Korea Standard Time'), 'yyyyMMdd_HHmmss'), '_', substring(guid(), 0, 8), '.', last(split(items('Apply_to_each')?['Name'], '.')))
+     ```
+     - 결과 형태: `원본파일명_yyyyMMdd_HHmmss_a1b2c3d4.확장자` (예: `report_20260728_174700_a1b2c3d4.pdf`, 한국 시간(KST, UTC+9) 기준)
+     - **왜 이런 순서인지**: `concat(A, B, C, ...)`는 인자를 적힌 순서 그대로 이어 붙입니다. 원본 파일명을 **맨 앞**에 두고, 그 뒤에 **받은 날짜_시각**(한국 시간 기준 `yyyyMMdd_HHmmss`)을 붙여 언제 도착한 첨부인지 바로 알 수 있게 하고, 혹시 같은 이름의 파일이 같은 시각에 겹치는 경우까지 대비해 짧은 8자리 무작위 문자열을 마지막으로 덧붙입니다. 확장자는 맨 끝에 그대로 유지해야 더블클릭으로 열 때 파일 종류가 정상 인식됩니다.
+     - ⚠️ **왜 반드시 "Compose"로 한 번만 계산해야 하는가**: 이 수식에는 `guid()`(호출할 때마다 매번 다른 무작위 값을 반환하는 함수)가 들어 있습니다. 만약 이 수식을 뒤에 나올 "Create file"의 File Name 칸과 "Append to array variable"의 Value 칸에 **각각 따로** 입력하면, `guid()`가 두 번 호출되어 서로 **다른 값**이 나오고, 결국 Excel에 기록되는 이름과 실제 OneDrive에 저장되는 파일 이름이 서로 달라져 버립니다. 반드시 "Compose" 액션 **하나로만** 계산한 뒤, 그 결과(`outputs('Compose')`)를 아래 두 곳에서 그대로 재사용해야 정확히 일치합니다.
+     - ⚠️ 첨부파일 이름에 **점(.)이 아예 없는 경우**(확장자가 없는 파일)에는 이 수식이 오류를 낼 수 있습니다. 그런 파일을 자주 다룬다면 예전의 단순한 수식(`concat(guid(), '_', items('Apply_to_each')?['Name'])`)으로 되돌려도 됩니다.
+     - ⚠️ `convertTimeZone(utcNow(), 'UTC', 'Korea Standard Time')`으로 이미 **한국 시간(UTC+9)** 으로 변환한 값을 씁니다. UTC 기준 시각을 그대로 쓰고 싶다면 이 부분을 `utcNow()`로 되돌리면 됩니다.
+3. **"Apply to each" 박스 안**, 방금 만든 "Compose" 액션 바로 밑의 **"+"** 아이콘 클릭 → `OneDrive for Business` 검색 → **"Create file"** 선택 (박스 바깥이 아니라 안쪽에 추가해야, 첨부파일마다 반복 실행됩니다)
+   - **Folder Path**: `/OutlookAttachments` (3단계 7번에서 만든 폴더)
+   - **File Name**: 입력칸 클릭 → Dynamic content에서 방금 만든 **`Compose`의 Outputs** 클릭 (또는 Expression 탭에서 `outputs('Compose')` 직접 입력)
+   - **File Content**: Dynamic content에서 `Attachments Content` **클릭** (실제 필드명이 이렇습니다. base64 첨부파일 내용을 담고 있음)
+4. 역시 **"Apply to each" 박스 안**, 방금 만든 "Create file" 바로 밑의 **"+"** 아이콘 클릭 → `Variable` 검색 → **"Append to array variable"** 선택
+   - **Name**: `varAttachmentNames`
+   - **Value**: Dynamic content에서 **`Compose`의 Outputs** 클릭 (또는 `outputs('Compose')`)
+5. **Save**
+
+> ⚠️ 첨부파일을 포함하면 흐름이 다루는 데이터량이 커져 실행이 느려지거나, 아주 큰 첨부파일(수십MB 이상)에서는 제한에 걸릴 수 있습니다. 문제가 생기면 트리거의 Include Attachments를 No로 되돌리고 4-1, 4-2 단계를 제거하면 됩니다.
+
+### 4-3. "Add a row into a table" 액션 (Apply to each 바깥, 6개 열 모두 채우기)
+
+⚠️ 이 액션은 반드시 **"Apply to each" 박스가 끝난 다음(바깥)** 에 추가해야 합니다. 박스 **안**에 넣으면 첨부파일 개수만큼 Excel에 같은 메일이 중복으로 기록됩니다.
+
+1. `Apply to each` 박스가 끝난 바로 다음 줄에 **"+ New step"** 클릭 → `Excel Online` 검색 → **"Excel Online (Business) - Add a row into a table"** 선택
 2. 액션 세부 설정:
    - **Location**: OneDrive for Business
    - **Document Library**: OneDrive
@@ -97,12 +175,12 @@ Power Automate의 "표에 행 추가" 액션은 **미리 만들어진 Excel 표(
      - 제목 칸 → Dynamic content에서 `Subject` **클릭**
      - 본문 칸 → Dynamic content에서 `Body` **클릭**
      - 받는사람 칸 → Dynamic content에서 `To` **클릭**
-     - 첨부파일명 칸 → 입력란을 클릭 → 번개 아이콘에서 **"Expression"** 탭 → 아래 수식 입력 (첨부파일이 여러 개면 쉼표로 구분된 이름 목록, 없으면 빈 값. `Select` 액션 이름을 바꿨다면 그 이름으로 대체):
+     - 첨부파일명 칸 → 입력란을 클릭 → 번개 아이콘에서 **"Expression"** 탭 → 아래 수식 입력 (4-2에서 모아둔 배열을 쉼표로 이어붙임 — 이 값은 OneDrive에 실제로 저장된 파일 이름과 **정확히 일치**합니다):
        ```
-       join(body('Select'), ', ')
+       join(variables('varAttachmentNames'), ', ')
        ```
 3. 오른쪽 위 **"Save"** 클릭
-4. 확인: 액션 오른쪽 위 점 3개(`...`) → **"Peek code"** 클릭 → 값들이 `"item/받은시각": "Received Time"`처럼 **글자 그대로** 보이면 잘못된 것이고, `"item/받은시각": "@{triggerBody()?['DateTimeReceived']}"`처럼 `@{...}` 수식으로 보여야 정상입니다.
+4. 확인: **"Add a row into a table"** 액션 클릭 → 상세 패널 상단의 **Parameters / Settings / Code view / Testing / About** 탭 중 **"Code view"** 탭 클릭 → 값들이 `"item/받은시각": "Received Time"`처럼 **글자 그대로** 보이면 잘못된 것이고, `"item/받은시각": "@triggerOutputs()?['body/receivedDateTime']"`처럼 `@...` 수식으로 보여야 정상입니다.
 
 > ⚠️ `Body`는 HTML 형식 그대로 저장됩니다 (예: `<div>안녕하세요</div>`). 무료 커넥터만으로는 흐름 안에서
 > HTML을 완전히 깨끗한 텍스트로 바꾸기 어렵습니다. 대신 나중에 이 Excel 파일을 읽을 때 Python에서
@@ -110,25 +188,6 @@ Power Automate의 "표에 행 추가" 액션은 **미리 만들어진 Excel 표(
 > 원본 텍스트가 꼭 필요하면 Dynamic content 목록에서 `Body Preview`(본문 미리보기, 일반 텍스트지만 일부만 표시)를 대신 써도 됩니다.
 >
 > ⚠️ 답장(RE) 메일은 보통 이전 대화 내용이 본문 아래에 인용되어 함께 오므로, `Body`에는 새로 쓴 부분뿐 아니라 **스레드 전체가 포함**됩니다. Graph API 차원에는 새 내용만 뽑아주는 `uniqueBody` 속성이 있지만, 이 커넥터의 Dynamic content 목록에 노출되어 있는지는 확인 필요 (Dynamic content 검색창에 "unique" 검색).
-
-### 4-3. "Apply to each" + "Create file" (첨부파일 실제 내용 저장)
-
-1. `Add a row into a table` 액션 **다음**에 새 단계 추가: `Control` 검색 → **"Apply to each"** 선택
-   - "Select an output from previous steps" → Dynamic content에서 `Attachments` 클릭
-2. "Apply to each" 안에 새 액션 추가: `OneDrive for Business` 검색 → **"Create file"** 선택
-   - **Folder Path**: `/OutlookAttachments` (3단계 7번에서 만든 폴더)
-   - **File Name**: 필드를 클릭 → Expression 탭 →
-     ```
-     concat(substring(items('Apply_to_each')?['Name'], 0, sub(length(items('Apply_to_each')?['Name']), add(length(last(split(items('Apply_to_each')?['Name'], '.'))), 1))), '_', substring(guid(), 0, 8), '.', last(split(items('Apply_to_each')?['Name'], '.')))
-     ```
-     - 결과 형태: `원본파일명_a1b2c3d4.확장자` (예: `report_a1b2c3d4.pdf`)
-     - **왜 이런 순서인지**: `concat(A, B, C, ...)`는 인자를 적힌 순서 그대로 이어 붙입니다. 예전 수식 `concat(guid(), '_', 원본이름)`은 무작위 문자열(guid, 36자)이 **맨 앞**에 오는 구조라, OneDrive 폴더에서 이름순으로 정렬하면 전부 무작위 문자열로 시작해 어떤 파일이 어떤 메일의 첨부인지 한눈에 구분하기 어려웠습니다. 위 새 수식은 원본 파일명을 **맨 앞**에 두고, 파일이 겹치지 않도록 짧은 8자리 무작위 문자열만 이름과 확장자 **사이**에 끼워 넣습니다 (확장자를 맨 끝에 그대로 유지해야 더블클릭으로 열 때 파일 종류가 정상 인식됩니다).
-     - (`items('Apply_to_each')`의 실제 이름은 "Apply to each" 단계 이름과 일치해야 합니다. Dynamic content에서 `Name`을 먼저 클릭해 넣은 뒤, 그 앞뒤에 나머지 수식을 직접 타이핑하는 방식이 오타를 줄이는 데 더 쉽습니다.)
-     - ⚠️ 첨부파일 이름에 **점(.)이 아예 없는 경우**(확장자가 없는 파일)에는 이 수식이 오류를 낼 수 있습니다. 그런 파일을 자주 다룬다면 예전의 단순한 수식(`concat(guid(), '_', items('Apply_to_each')?['Name'])`)으로 되돌려도 됩니다.
-   - **File Content**: Dynamic content에서 `Attachments Content` **클릭** (실제 필드명이 이렇습니다. base64 첨부파일 내용을 담고 있음)
-3. **Save**
-
-> ⚠️ 첨부파일을 포함하면 흐름이 다루는 데이터량이 커져 실행이 느려지거나, 아주 큰 첨부파일(수십MB 이상)에서는 제한에 걸릴 수 있습니다. 문제가 생기면 트리거의 Include Attachments를 No로 되돌리고 4-1, 4-3 단계를 제거하면 됩니다.
 
 ---
 
@@ -139,6 +198,7 @@ Power Automate의 "표에 행 추가" 액션은 **미리 만들어진 Excel 표(
 3. 잠시 후 Power Automate 화면에 흐름 실행이 성공(초록색 체크)으로 표시되는지 확인
 4. `OutlookDigest.xlsx` 파일을 열어서 새 행이 추가됐는지, 받는사람/첨부파일명 열까지 채워졌는지 확인
 5. OneDrive `OutlookAttachments` 폴더에 실제 첨부파일이 저장됐는지 확인
+6. Excel의 첨부파일명 열 값과 OneDrive `OutlookAttachments` 폴더에 저장된 실제 파일 이름이 **글자 하나까지 정확히 일치**하는지 확인 (일치하지 않으면 4-2절의 "Compose" 액션을 빠뜨리고 Create file/Append to array variable에 각각 수식을 따로 넣은 것은 아닌지 확인)
 
 ---
 
@@ -210,10 +270,51 @@ Power Automate의 "표에 행 추가" 액션은 **미리 만들어진 Excel 표(
 | 흐름은 성공인데 Excel에 행이 안 생김 | "Table" 드롭다운에서 고른 이름(`Table1` 등)이 실제 Excel의 표 이름과 일치하는지, 범위가 실제로 "Table"로 변환되어 있는지("Table Design" 탭이 보이면 정상) 확인 |
 | 흐름 생성 시 커넥터 관련 오류/차단 메시지 | 조직의 Power Platform DLP 정책이 이 커넥터 조합을 막은 것. IT 승인 없이는 이 방식 자체가 불가능하다는 뜻이므로, 다른 커넥터 조합(예: SharePoint 리스트)으로 재시도하거나 이 방식을 포기해야 함 |
 | 본문에 HTML 태그가 섞여 나옴 | 정상입니다. Python으로 후처리해서 태그를 제거하세요 (7절 참고) |
-| 매번 같은 값("Received Time", "From" 등 글자 그대로)이 Excel에 쌓임 / Peek code에 `@{...}` 없이 문자열만 보임 | Dynamic content 칩을 클릭하지 않고 이름을 직접 타이핑한 경우입니다. 4-2절대로 입력칸을 비우고 Dynamic content 목록에서 클릭해서 다시 넣으세요 |
+| 매번 같은 값("Received Time", "From" 등 글자 그대로)이 Excel에 쌓임 / Peek code에 `@{...}` 없이 문자열만 보임 | Dynamic content 칩을 클릭하지 않고 이름을 직접 타이핑한 경우입니다. 4-3절대로 입력칸을 비우고 Dynamic content 목록에서 클릭해서 다시 넣으세요 |
 | rclone 등에서 로그인 시 "Need admin approval" 화면이 뜸 | 테넌트 정책상 모든 제3자 앱에 관리자 동의가 강제됨. 이 경로는 포기하고 7절의 OneDrive 동기화 + 작업 스케줄러 방식 사용 |
 | PowerShell에서 `%OneDriveCommercial%`가 그대로 문자열로 남고 경로 치환이 안 됨 | `%VAR%`는 cmd.exe(배치파일) 전용 문법입니다. PowerShell 프롬프트에서 직접 테스트하려면 `$env:OneDriveCommercial`을 쓰거나, `.bat` 파일 자체를 실행해서 테스트하세요 |
 | 설정 중 client_secret/sshpass 등에 실수로 실제 비밀번호를 입력함 | 즉시 해당 계정 비밀번호를 변경하세요. 자동화에는 비밀번호 대신 SSH 키 인증(7절)을 사용해 비밀번호 자체를 스크립트/채팅에 남기지 않는 것이 원칙입니다 |
-| "Add a row into a table"에서 `InvalidTemplate ... 'select' is not defined or not valid` 오류 | `select(...)`는 Power Automate 인라인 수식 함수가 아닙니다(Power Apps의 `Select()`와 다름). 4-1절처럼 별도의 "Data Operation - Select" 액션을 추가해서 처리하세요 |
-| "Select" 액션 저장 시 Flow checker에 `Enter a valid JSON.` 오류 | Map을 텍스트 모드로 바꾼 뒤 `item()?['Name']`를 수식 편집기 없이 그냥 텍스트로 타이핑하면 JSON으로 파싱되지 않아 발생합니다. 4-1절처럼 Expression 편집기(⚡ → Expression 탭)로 넣거나, 직접 입력해야 한다면 `@{item()?['Name']}`처럼 `@{ }`로 감싸서 입력하세요 |
-| OneDrive `OutlookAttachments` 폴더에서 파일이 전부 무작위 문자열로 시작해 어떤 메일 첨부인지 구분이 안 됨 | 4-3절의 File Name 수식에서 guid가 이름 맨 앞에 오도록 되어 있었기 때문입니다. 4-3절에 안내된 새 수식(원본 이름이 앞, 짧은 8자리 무작위 문자열이 이름과 확장자 사이)으로 바꾸세요 |
+| "Add a row into a table"에서 `InvalidTemplate ... 'select' is not defined or not valid` 오류 | `select(...)`는 Power Automate 인라인 수식 함수가 아닙니다(Power Apps의 `Select()`와 다름). 지금 구조는 별도의 "Select" 액션 자체를 쓰지 않으므로(4-2절 Compose로 대체), 이 오류가 나면 어딘가에 `select(...)`를 인라인으로 입력한 곳이 있는지 확인하세요 |
+| Excel의 첨부파일명과 OneDrive에 실제 저장된 파일 이름이 서로 다름 | 4-2절의 "Compose" 액션 없이 "Create file"의 File Name과 "Append to array variable"의 Value에 파일명 수식을 각각 따로 입력한 경우입니다. `guid()`가 호출될 때마다 다른 값을 반환하므로 두 값이 달라집니다. 반드시 "Compose"로 한 번만 계산하고 `outputs('Compose')`를 두 곳에서 재사용하세요 |
+| OneDrive `OutlookAttachments` 폴더에서 파일이 전부 무작위 문자열로 시작해 어떤 메일 첨부인지 구분이 안 됨 | 4-2절의 "Compose" 수식에서 guid가 이름 맨 앞에 오도록 되어 있었기 때문입니다. 4-2절에 안내된 새 수식(원본 이름이 앞, 그 뒤에 받은 날짜_시각, 마지막에 짧은 8자리 무작위 문자열, 확장자는 그대로 끝에 유지)으로 바꾸세요 |
+| "Add a row into a table"이 Excel에 첨부파일 개수만큼 중복된 줄을 만듦 | "Add a row into a table" 액션을 "Apply to each" 박스 **안**에 넣은 경우입니다. 4-3절처럼 반드시 박스 **바깥(다음)** 으로 옮기세요 |
+| 흐름 저장 시 `InvalidTemplate ... The repetition action(s) 'Apply_to_each' referenced by 'inputs' in action 'Compose' are not defined in the template` 오류 | "Apply to each" 박스의 실제 제목(예: `Apply to each 1`)과 Compose 수식 안에서 참조한 이름(`Apply_to_each`)이 서로 다른 경우입니다. 흐름 안에 "Apply to each"가 하나뿐이라면, 박스 제목의 이름을 클릭해서 숫자 없이 **`Apply to each`** 로 바꾸는 것이 가장 간단한 해결책입니다 (문서의 Compose 수식과 정확히 일치하게 됨) |
+| 흐름을 Import한 동료가 실행했는데 계속 원작성자(나)의 메일함/OneDrive만 감시함 | Import 시 각 Connection을 "Create new"로 본인 계정으로 새로 연결하지 않고 그대로 진행한 경우입니다. 9-1절대로 Import 화면에서 각 연결마다 "Select during import" → "Create new" → 본인 계정 로그인을 반드시 거쳐야 합니다 |
+| "Get file metadata using path" 단계가 빨간 X(실패)로 표시됨 | 4-0절에서는 **이 실패가 정상**입니다 (`OutlookDigest.xlsx` 파일이 이미 있다는 뜻). 다음 단계를 클릭 → "Settings" 탭 → "Run after" 섹션에 "Has failed"/"Is skipped"가 체크되어 있는지 확인하세요. 전체 흐름의 마지막 결과가 초록색 체크면 문제 없습니다 |
+| OneDrive for Business 커넥터의 "Add an action" 목록에 "Create new folder"가 없음 | 정상입니다. 이 커넥터에는 폴더 생성 전용 액션이 없습니다. 4-0절 안내대로 `OutlookAttachments` 폴더는 4-2절의 "Create file"이 그 경로로 처음 저장할 때 자동 생성됩니다 (자동 생성이 안 되는 것을 확인하면 3단계 7번처럼 한 번만 수동으로 만들어 두세요) |
+
+---
+
+## 9. 다른 사람도 그대로 가져다 쓸 수 있게 만들기
+
+지금까지 만든 흐름을 동료도 자기 메일함/OneDrive 기준으로 그대로 쓰게 하려면 **흐름 자체를 공유**하기만 하면 됩니다. Excel 파일(Table1 포함) 자동 준비와 첨부파일 폴더 자동 생성은 이미 4-0절에서 흐름 안에 포함시켰으므로, 동료는 Import 한 번만으로 나머지가 전부 자동으로 준비됩니다.
+
+### 9-1. 흐름을 "패키지"로 내보내서 동료에게 전달하기
+
+Power Automate의 "Share" 기능으로 흐름을 같이 소유하게 할 수도 있지만, 그렇게 하면 트리거가 여전히 **원작성자(이 흐름을 처음 만든 사람, 예: 이철주)의 메일함만** 감시합니다. 동료가 **자기 메일함**을 감시하는 자기만의 흐름을 가지려면 반드시 **내보내기(Export) → 가져오기(Import)** 방식을 써야 합니다.
+
+**내가 할 일 (1회)**
+
+✅ 이미 완료됨: 이 저장소의 [Get_Outlook_Mail_20260728014316.zip](Get_Outlook_Mail_20260728014316.zip)이 아래 절차로 내보내 둔 결과물입니다 (0절 "빠른 시작"에서 바로 사용할 수 있습니다). 흐름을 수정한 뒤 다시 내보내야 할 때만 아래 절차를 반복하면 됩니다.
+
+1. `https://make.powerautomate.com` → 왼쪽 **"My flows"**
+2. 흐름 오른쪽 점 3개(`...`) → **"Export"** → **"Package (.zip)"**
+3. 파일 이름 확인 후 **"Export"** 클릭 → zip 파일 다운로드
+4. 이 zip 파일을 사내 공유 드라이브나 메일로 동료에게 전달 (또는 이 저장소에 새 파일명으로 커밋)
+
+**동료가 할 일 (1회, 받는 사람마다 반복)**
+
+1. `https://make.powerautomate.com` → **"My flows"** → **"Import"**
+2. 방금 받은 zip 파일 업로드
+3. 화면에 이 흐름이 쓰는 연결(Connections) 목록이 뜹니다: `Office 365 Outlook`, `Excel Online (Business)`, `OneDrive for Business`
+4. 각 연결 항목 오른쪽에서 **"Select during import"** → **"Create new"** 선택 → 팝업에서 **본인 회사 계정으로 로그인**
+   - ⚠️ 이 단계를 빠뜨리면 흐름이 원작성자(나)의 연결을 그대로 재사용하려다 권한 오류가 나거나, 동료가 실행한 흐름인데 **내 메일함을 계속 감시**하게 될 수 있습니다. 반드시 각자 계정으로 새로 연결하세요.
+5. **"Import"** 클릭 → 완료되면 동료의 "My flows" 목록에 흐름이 생기고 자동으로 **켜짐(On)** 상태가 됩니다.
+6. 4-0절의 자동 준비 로직이 흐름 안에 이미 포함되어 있으므로, 동료는 Excel 파일이나 첨부파일 폴더를 따로 만들 필요가 없습니다.
+
+### 9-2. 최종 확인
+
+1. 4-0절까지 모두 반영한 뒤 **"Test" → "Manually"**로 한 번 실행합니다.
+2. 실행 결과에서 "Get file metadata using path"나 "Create new folder"가 빨간 X로 나와도, **전체 흐름이 초록색 체크로 끝나는지** 확인합니다 (run after 설정이 제대로 됐다는 뜻).
+3. `OutlookDigest.xlsx`, `OutlookAttachments` 폴더가 실제로 내 OneDrive에 자동 생성됐는지 확인합니다.
+4. 이 상태로 9-1의 방법으로 zip을 내보내면, 동료는 **Import 한 번만으로** 자기 메일함 → 자기 OneDrive의 Excel/첨부파일 폴더까지 전부 자동으로 준비됩니다.
