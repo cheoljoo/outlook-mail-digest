@@ -5,7 +5,10 @@ OneDrive에 동기화된 OutlookDigest.xlsx 를 원격 서버로 SSH 키 인증�
 - SSH 키가 없으면 생성하고, 서버에 등록되어 있지 않으면 등록합니다 (이미 등록되어 있으면 skip).
 - Windows 작업 스케줄러에 이 스크립트를 주기적으로 실행하는 작업이 없으면 스스로 등록합니다
   (이미 등록되어 있으면 skip).
-- 마지막으로 파일을 복사합니다.
+- 파일을 복사합니다.
+- OneDrive에 동기화된 OutlookAttachments 폴더에서 30일 지난 첨부파일을 정리합니다
+  (로컬에서 지우면 OneDrive 동기화 특성상 클라우드에서도 함께 지워집니다).
+- 로그 파일이 1MB를 넘으면 자동으로 백업(.log.1)하고 새로 시작합니다.
 - 모든 단계는 시간과 함께 sync_outlook_digest.log 에 기록되어, 나중에 실패 원인이
   (OneDrive 파일 없음 / 서버 연결 실패 등) 무엇이었는지 로그만 보고 알 수 있습니다.
 
@@ -18,6 +21,7 @@ import logging
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 REMOTE_USER = "cheoljoo.lee"
@@ -25,9 +29,22 @@ REMOTE_HOST = "tiger02.lge.com"
 REMOTE_DIR = "~/temp/"
 KEY_PATH = Path.home() / ".ssh" / "id_rsa"
 LOCAL_FILE = Path(os.environ.get("OneDriveCommercial", "")) / "OutlookDigest.xlsx"
+ATTACHMENTS_DIR = Path(os.environ.get("OneDriveCommercial", "")) / "OutlookAttachments"
+ATTACHMENT_MAX_AGE_DAYS = 30
 TASK_NAME = "OutlookDigestSync"
 RUN_BAT_PATH = Path(__file__).resolve().parent / "run.bat"
 LOG_PATH = Path(__file__).resolve().parent / "sync_outlook_digest.log"
+LOG_MAX_BYTES = 1_000_000
+
+
+def _rotate_log_if_needed() -> None:
+    if LOG_PATH.exists() and LOG_PATH.stat().st_size > LOG_MAX_BYTES:
+        backup_path = LOG_PATH.with_suffix(LOG_PATH.suffix + ".1")
+        backup_path.unlink(missing_ok=True)
+        LOG_PATH.rename(backup_path)
+
+
+_rotate_log_if_needed()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -155,6 +172,23 @@ def copy_file() -> None:
     logger.info("파일 전송 성공.")
 
 
+def cleanup_old_attachments() -> None:
+    if not ATTACHMENTS_DIR.exists():
+        logger.info(f"첨부파일 폴더가 없어 정리를 건너뜁니다: {ATTACHMENTS_DIR}")
+        return
+
+    cutoff = time.time() - ATTACHMENT_MAX_AGE_DAYS * 86400
+    removed = 0
+    for path in ATTACHMENTS_DIR.iterdir():
+        if path.is_file() and path.stat().st_mtime < cutoff:
+            path.unlink()
+            removed += 1
+    logger.info(
+        f"오래된 첨부파일 정리 완료: {removed}개 삭제 "
+        f"({ATTACHMENT_MAX_AGE_DAYS}일 이상 지난 파일, {ATTACHMENTS_DIR})"
+    )
+
+
 def main() -> None:
     logger.info("===== sync_outlook_digest 시작 =====")
     try:
@@ -170,6 +204,7 @@ def main() -> None:
             register_task()
 
         copy_file()
+        cleanup_old_attachments()
     except SystemExit:
         logger.error("===== sync_outlook_digest 실패로 종료 =====")
         raise

@@ -14,11 +14,15 @@ flowchart LR
     C --> E[Windows PC<br/>OneDrive 실시간 동기화]
     E --> F[작업 스케줄러<br/>run.bat 매시간 실행]
     F --> G[tiger02 서버<br/>~/temp/OutlookDigest.xlsx]
+    F --> H[오래된 첨부파일<br/>자동 정리 30일]
+    P[사람이 메일에<br/>팔로우업 플래그 표시] -.선택.-> J[별도 흐름 설계중<br/>Jira 티켓 자동 생성]
+    J -.-> K[Excel 행 업데이트<br/>Jira처리여부/티켓번호]
 ```
 
 - **클라우드 단계 (자동)**: Power Automate가 메일 도착을 감지해 Excel과 첨부파일을 OneDrive에 저장합니다. Outlook이나 PC가 꺼져 있어도 동작합니다.
-- **PC 단계 (최초 1회 설정 후 자동)**: OneDrive 동기화 + Windows 작업 스케줄러가 주기적으로 `tiger02.lge.com` 서버로 파일을 전달합니다.
+- **PC 단계 (최초 1회 설정 후 자동)**: OneDrive 동기화 + Windows 작업 스케줄러가 주기적으로 `tiger02.lge.com` 서버로 파일을 전달하고, 30일 지난 첨부파일을 자동으로 정리합니다.
   - **아직 시간이 없어 시험 / 확인은 하지 못함. 디자인과 코드만 있음**
+- **(선택, 설계만 있고 아직 검증 전) Jira 자동 등록**: 회사가 메일을 일괄 수집하는 것과 달리, 본인이 팔로우업 플래그로 직접 표시한 메일만 골라 Jira 티켓으로 자동 등록하는 별도 흐름. 자세한 설계는 [my_outlook_power_automate_setup.md](my_outlook_power_automate_setup.md) 10절 참고.
 - 각 구성 요소의 자세한 원리는 [my_outlook_power_automate_setup.md](my_outlook_power_automate_setup.md) 1절 참고.
 
 ## 🚀 Getting Started (처음 시작하기)
@@ -94,7 +98,7 @@ run.bat
 
 - 디자인상 명확하지는 않습니다. 현재는 linux system으로 파일을 올리는 것으로 생각했었습니다. 실제로 작업을 하는 것은 그냥 Windows에서 바로 동작시켜 jira에 ticket을 만드는 것 입니다.
 - 기타
-  - [sync_outlook_digest.py](sync_outlook_digest.py) — OneDrive에 동기화된 `OutlookDigest.xlsx`를 SSH 키 인증으로 원격 서버(tiger02)에 전송. SSH 키 생성/서버 등록, Windows 작업 스케줄러 등록 여부를 스스로 확인해 필요할 때만 처리(idempotent). 모든 단계를 `sync_outlook_digest.log`에 시간과 함께 기록.
+  - [sync_outlook_digest.py](sync_outlook_digest.py) — OneDrive에 동기화된 `OutlookDigest.xlsx`를 SSH 키 인증으로 원격 서버(tiger02)에 전송. SSH 키 생성/서버 등록, Windows 작업 스케줄러 등록 여부를 스스로 확인해 필요할 때만 처리(idempotent). `OutlookAttachments` 폴더에서 30일 지난 첨부파일도 정리(로컬 삭제 시 OneDrive 동기화로 클라우드에서도 함께 삭제됨). 모든 단계를 `sync_outlook_digest.log`에 시간과 함께 기록하며, 1MB가 넘으면 자동으로 로테이션.
   - [run.bat](run.bat) — `uv`가 없으면 설치한 뒤 `uv run sync_outlook_digest.py` 실행. Windows 작업 스케줄러에 이 파일을 등록해 주기적으로 돌림.
   - [extract_outlook.py](extract_outlook.py) — (폐기된 방식) 클래식 Outlook COM 자동화로 로컬에서 직접 추출하던 스크립트. 참고용으로 보존.
 

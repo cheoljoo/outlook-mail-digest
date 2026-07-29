@@ -61,11 +61,11 @@ Power Automate의 "표에 행 추가" 액션은 **미리 만들어진 Excel 표(
 
 1. OneDrive for Business (`https://onedrive.live.com` 또는 `office.com` → OneDrive) 접속
 2. 새 Excel 통합 문서 생성 → 이름을 `OutlookDigest.xlsx` 로 저장
-3. 첫 번째 행에 아래 6개의 헤더를 입력합니다. (받는사람/첨부파일명을 처음부터 포함)
+3. 첫 번째 행에 아래 7개의 헤더를 입력합니다. (받는사람/첨부파일명/메일ID를 처음부터 포함. 메일ID는 사람이 보는 용도가 아니라 10절의 Jira 자동화/데이터 정리 흐름이 이 행을 정확히 찾기 위한 내부 키입니다.)
 
-   | A | B | C | D | E | F |
-   |---|---|---|---|---|---|
-   | 받은시각 | 보낸사람 | 제목 | 본문 | 받는사람 | 첨부파일명 |
+   | A | B | C | D | E | F | G |
+   |---|---|---|---|---|---|---|
+   | 받은시각 | 보낸사람 | 제목 | 본문 | 받는사람 | 첨부파일명 | 메일ID |
 
 4. 헤더를 포함해서 범위를 선택 → 상단 메뉴 **"Insert" → "Table"** 클릭 → "My table has headers" 체크 → **"OK"**
 5. 표 이름을 확인/변경 (기본값은 `Table1`, 나중에 Power Automate에서 이 이름으로 선택합니다. 표를 선택한 상태에서 리본의 **"Table Design"** 탭 → 좌측 상단 이름 칸(`Table1`)에서 원하면 `MailTable` 로 변경해도 됩니다. 지금처럼 `Table1` 그대로 두고 진행해도 무방합니다.)
@@ -179,6 +179,7 @@ Excel의 "첨부파일명" 열에 **실제로 OneDrive에 저장된 파일 이�
        ```
        join(variables('varAttachmentNames'), ', ')
        ```
+     - 메일ID 칸 → Dynamic content에서 `Message Id`(또는 `Internet Message Id`) **클릭** (사람이 보는 값이 아니라 10절 자동화가 이 행을 찾기 위한 키입니다)
 3. 오른쪽 위 **"Save"** 클릭
 4. 확인: **"Add a row into a table"** 액션 클릭 → 상세 패널 상단의 **Parameters / Settings / Code view / Testing / About** 탭 중 **"Code view"** 탭 클릭 → 값들이 `"item/받은시각": "Received Time"`처럼 **글자 그대로** 보이면 잘못된 것이고, `"item/받은시각": "@triggerOutputs()?['body/receivedDateTime']"`처럼 `@...` 수식으로 보여야 정상입니다.
 
@@ -284,6 +285,8 @@ Excel의 "첨부파일명" 열에 **실제로 OneDrive에 저장된 파일 이�
 | 9-2절 방식으로 붙여넣은 뒤 저장 시 `InvalidTemplate ... The repetition action(s) 'Apply_to_each' referenced by 'inputs' in action 'Compose' are not defined in the template` 오류 | "Paste action" 직후 자동으로 붙는 `-copy` 접미사(`Apply to each-copy`, `Compose-copy`) 때문입니다. 9-2절 4)번 안내대로 붙여넣은 박스 이름에서 `-copy`를 지워 정확히 `Apply to each`, `Compose`로 되돌리세요 |
 | "Get file metadata using path" 단계가 빨간 X(실패)로 표시됨 | 4-0절에서는 **이 실패가 정상**입니다 (`OutlookDigest.xlsx` 파일이 이미 있다는 뜻). 다음 단계를 클릭 → "Settings" 탭 → "Run after" 섹션에 "Has failed"/"Is skipped"가 체크되어 있는지 확인하세요. 전체 흐름의 마지막 결과가 초록색 체크면 문제 없습니다 |
 | OneDrive for Business 커넥터의 "Add an action" 목록에 "Create new folder"가 없음 | 정상입니다. 이 커넥터에는 폴더 생성 전용 액션이 없습니다. 4-0절 안내대로 `OutlookAttachments` 폴더는 4-2절의 "Create file"이 그 경로로 처음 저장할 때 자동 생성됩니다 (자동 생성이 안 되는 것을 확인하면 3단계 7번처럼 한 번만 수동으로 만들어 두세요) |
+| `jira` 검색 시 커넥터에 왕관(👑 Premium) 아이콘이 붙어있거나, 사내 Jira Data Center용 커넥터 자체가 안 보임 | 10-2절 참고. Premium 커넥터는 별도 유료 라이선스가 필요하고, 사내 Data Center Jira는 온프레미스 게이트웨이(IT 승인 필요)가 있어야 접근 가능합니다. 둘 다 "승인 없이"라는 전제와 맞지 않으므로, 이 경우 10절 Jira 연동은 보류하고 4절(Excel 기록)까지만 유지하세요 |
+| "Update a row"/"Delete a row" 액션에서 원하는 행을 못 찾음 | Key Column을 `메일ID`로 지정했는지, 10-1절대로 4-3절의 "Add a row into a table"에 메일ID 값이 실제로 채워지고 있는지(Peek code로 확인) 먼저 확인하세요. 기존에 이미 쌓인 행들은 메일ID 열을 나중에 추가했다면 값이 비어 있을 수 있습니다 |
 
 ---
 
@@ -353,3 +356,82 @@ Import 기능 자체를 전혀 쓰지 않고, Power Automate 디자이너의 **"
 2. 실행 결과에서 "Get file metadata using path"나 "Create new folder"가 빨간 X로 나와도, **전체 흐름이 초록색 체크로 끝나는지** 확인합니다 (run after 설정이 제대로 됐다는 뜻).
 3. `OutlookDigest.xlsx`, `OutlookAttachments` 폴더가 실제로 동료 자신의 OneDrive에 자동 생성됐는지 확인합니다.
 4. 방법 A(9-1)를 쓸 수 있는 조직이라면 그 zip을 그대로 재활용하면 되고, 방법 B(9-2)로 진행했다면 이렇게 완성한 동료의 흐름을 그 다음 사람에게 전달할 때도 똑같이 9-2 절차(공유 → 액션 복사/붙여넣기)를 반복하면 됩니다.
+
+---
+
+## 10. Jira 자동 티켓 생성 + 오래된 데이터 자동 정리 (설계, 아직 실제 화면에서 검증 전)
+
+> ⚠️ 이 절은 다른 절과 달리 **아직 실제로 만들어서 확인하지 못했습니다.** 사내 Jira가 Cloud인지 Data Center(사내 서버)인지, Power Automate의 Jira 커넥터가 Standard(무료)인지 Premium(유료/승인 필요)인지에 따라 10-2 자체가 막힐 수 있습니다. 10-0/10-2 시작 전 사전 확인부터 하세요. 실제로 진행하면서 화면이 이 문서와 다르면 캡처를 보내주시면 그때 맞춰서 고치겠습니다.
+
+### 10-0. 왜 "도착하는 모든 메일 자동 등록"이 아니라 "내가 표시한 메일만"인가
+
+- 회사가 전 직원의 메일 내용을 자동으로 걷어가서 들여다보면 개인정보/통신비밀 관련 법적 문제가 생길 수 있습니다.
+- 반면 지금 이 자동화는 **본인이 자기 계정으로, 자기 메일함에 대해** 설정한 것이고, Jira 티켓도 **본인이 직접 골라 표시한 메일만** 대상으로 합니다. 회사가 시킨 감시가 아니라 개인이 자기 업무를 정리하는 목적이라 법적 문제 소지가 적고, "내가 일이라고 판단한 것"만 걸러지므로 데이터로도 더 의미가 있습니다.
+- 그래서 4절의 "모든 메일을 Excel에 기록"하는 흐름은 그대로 개인 로그 용도로 두고, Jira 티켓 생성은 **완전히 별도의 흐름**으로 만들어 "사람이 명시적으로 플래그(📌 팔로우업 표시)한 메일만" 대상으로 합니다.
+  - ⚠️ **왜 4절 흐름 안에 조건만 추가하면 안 되는가**: `When a new email arrives (V3)` 트리거는 메일이 **처음 도착한 순간에만** 한 번 실행됩니다. 메일을 받은 뒤 시간이 지나 사람이 나중에 플래그를 붙이는 시점에는 이 트리거가 다시 실행되지 않으므로, 트리거 안에서 플래그 여부를 검사하는 방식은 동작하지 않습니다. 대신 아래 10-2처럼 **주기적으로 플래그된 메일을 찾으러 가는(폴링) 별도 흐름**(Recurrence 트리거)이 필요합니다.
+
+### 10-1. Excel에 "메일ID" 열 추가 (이미 만들어 둔 기존 표에 추가하는 방법)
+
+3단계/4-3절을 처음부터 새로 만드는 경우 이미 메일ID 열이 포함되어 있습니다. **이미 운영 중인 기존 표**에 추가하려면:
+
+1. OneDrive에서 `OutlookDigest.xlsx` 열기 → 표 맨 오른쪽 열 옆에 새 헤더 입력: **메일ID** (자동으로 표 범위에 포함됨)
+2. 4절 흐름으로 돌아가서 **"Add a row into a table"** 액션의 새로 생긴 메일ID 칸 클릭 → Dynamic content에서 `Message Id` **클릭**
+3. (Jira 연동을 쓸 계획이면) 같은 방식으로 **Jira처리여부**, **Jira티켓번호** 열도 미리 추가해 둡니다 (10-2에서 사용).
+4. Save
+
+### 10-2. 새 흐름: "플래그한 메일 → Jira 티켓 자동 생성"
+
+**사전 확인 (반드시 먼저)**
+
+- `https://make.powerautomate.com` → 아무 흐름의 액션 추가 화면에서 `jira` 검색
+  - **Jira Cloud**용 표준(Standard) 커넥터가 보이고 왕관(👑 Premium) 아이콘이 없으면 → 아래대로 진행 가능
+  - 왕관 아이콘이 있거나, 사내 Jira가 Data Center/Server(사내망 전용 URL)라서 목록에 아예 안 뜨면 → 이 경로는 추가 라이선스나 사내 게이트웨이(둘 다 IT 승인 필요)가 있어야 하므로 "승인 없이"라는 이 프로젝트의 전제와 맞지 않습니다. 이 경우 10절 전체를 보류하고 4절까지만 유지하는 것을 추천합니다.
+
+**흐름 구성 (별도의 새 Automated cloud flow, 예: `Outlook 플래그 메일 -> Jira 등록`)**
+
+1. 트리거: `Recurrence` 검색 → **"Recurrence"** 선택 → Interval `15`, Frequency `Minute` (원하는 주기로 조정)
+2. `+ New step` → `Office 365 Outlook` 검색 → **"Get emails (V3)"** 선택
+   - Folder: Inbox
+   - Top: `50` (한 번에 가져올 최대 개수, 필요시 조정)
+3. 트리거 다음에 `Control` → **"Apply to each"** 추가 → Get emails 결과 선택
+4. 그 안에 `Control` → **"Condition"** 추가:
+   - **Flag > Flag Status** `is equal to` `flagged`
+   - **AND** 아직 Jira로 안 만들어졌는지 확인: `Excel Online (Business)` → "Get a row" 등으로 메일ID 매칭 행의 Jira처리여부를 먼저 조회하거나, 더 간단하게는 Outlook의 **Categories**를 마킹용으로 써서 `not(contains(items('Apply_to_each')?['categories'], 'JiraDone'))` 를 Expression으로 추가
+   - **Yes(조건 참)** 분기:
+     1. `Jira` 커넥터 → **"Create a new issue"**: Project/Issue type 선택, Summary = 메일 `Subject`, Description = 메일 `Body`(또는 `Body Preview`)
+     2. 첨부파일이 있으면 `Apply to each`(메일의 Attachments) 안에서 Jira **"Add attachment"** 액션으로 각 첨부를 그대로 티켓에 첨부
+     3. `Excel Online (Business)` → **"Update a row"**: File/Table은 4절과 동일한 `OutlookDigest.xlsx`/`Table1`, **Key Column**: `메일ID`, **Key Value**: 지금 메일의 `Message Id`, **Jira처리여부** = `완료`, **Jira티켓번호** = 방금 만든 이슈의 키(예: `body('Create_a_new_issue')?['key']`)
+     4. Outlook에서 이 메일에 `JiraDone` 카테고리를 붙이는 액션(정확한 이름은 실제 화면에서 "categor" 검색해서 확인) 또는 특정 폴더로 이동시켜서 다음 폴링에서 다시 걸리지 않게 함
+5. Save → Test
+
+### 10-3. 오래된 데이터 자동 정리 (Jira 등록이 끝난 메일의 원본은 지우기)
+
+Jira 티켓이 만들어진 순간부터는 **Jira가 진짜 원본(source of truth)** 이 되므로, OneDrive의 첨부파일/Excel 행을 오래 들고 있을 필요가 없습니다. 오래 들고 있을수록 10-0에서 말한 "개인정보 장기 보관" 리스크도 커집니다.
+
+**첨부파일 정리는 Windows 로컬에서 간단히 처리 가능**
+
+OneDrive 동기화는 양방향이라, Windows에 동기화된 로컬 `OutlookAttachments` 폴더에서 파일을 지우면 OneDrive 클라우드에서도 함께 지워집니다 (즉시 영구삭제는 아니고 OneDrive 자체 휴지통으로 이동, Business 계정 기본 93일 뒤 영구삭제). 그래서 별도 Power Automate 흐름 없이, `sync_outlook_digest.py`에 아래와 같은 정리 단계를 추가하는 것만으로 충분합니다.
+
+- 대상: 로컬 `OutlookAttachments` 폴더(=OneDrive 동기화 폴더)에서 파일의 수정 시각이 30일보다 오래된 것
+- 방법: 파일 삭제 전 그 메일이 실제로 Jira 처리 완료(`Jira처리여부=완료`)인지까지 확인하려면 Excel 값을 읽어야 하는데, 이는 로컬 xlsx를 직접 열지 않고 Excel Online API(REST)를 호출해서 확인하는 방식이 안전합니다. 우선은 단순하게 "30일 지난 첨부파일은 무조건 정리"로 시작하고, 필요하면 이후에 Jira처리여부 확인 로직을 추가하는 것을 권장합니다.
+
+**Excel 행 삭제는 Power Automate로 (로컬 직접 편집 금지)**
+
+`.xlsx`는 Excel Online/Power Automate가 언제든 동시에 쓰기 중일 수 있는 바이너리 파일이라, 로컬에서 openpyxl 등으로 직접 편집하면 OneDrive 동기화 충돌이나 파일 손상 위험이 있습니다. 행 삭제는 반드시 아래처럼 클라우드 흐름의 "Delete a row" 액션으로 처리하세요.
+
+**새 흐름 (별도, 예: `OutlookDigest 정리`)**
+
+1. 트리거: `Recurrence` → Interval `1`, Frequency `Day`
+2. `Excel Online (Business)` → **"List rows present in a table"**: File/Table 동일, Filter Query: `Jira처리여부 eq '완료'`
+3. `Apply to each` (결과 행마다):
+   - `Condition`: 받은시각이 30일보다 오래됐는지 확인 (Expression: `less(item()?['받은시각'], addDays(utcNow(), -30))`)
+   - 참이면 `Excel Online (Business)` → **"Delete a row"**: 방금 그 행 (첨부파일 자체는 위 로컬 정리 로직이 별도로 처리)
+4. Save
+
+> ⚠️ "Delete a row"는 되돌릴 수 없습니다. 처음 실행할 때는 조건을 `받은시각 < 오늘부터 3650일`처럼 아주 길게 잡아 "Test" 화면에서 삭제 대상이 의도한 것만 걸리는지 먼저 확인한 뒤 30일로 좁히는 것을 추천합니다.
+
+### 10-4. `sync_outlook_digest.log` 자동 로테이션 (구현 완료)
+
+로그가 append 전용이라 계속 커지는 문제를 해결했습니다. `sync_outlook_digest.py`가 매 실행 시작 시 로그 파일 크기가 1MB를 넘으면 `sync_outlook_digest.log.1`로 백업하고 새로 시작합니다 (백업은 하나만 유지, 이전 백업은 덮어씀). 별도 설정 없이 자동으로 동작합니다.
+
+---
