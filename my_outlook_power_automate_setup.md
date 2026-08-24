@@ -82,6 +82,7 @@ Power Automate의 "표에 행 추가" 액션은 **미리 만들어진 Excel 표(
 4. 트리거 검색창에 `When a new email arrives` 입력 → **"Office 365 Outlook - When a new email arrives (V3)"** 선택 → **Create**
 5. 트리거 세부 설정:
    - **Folder**: Inbox (필요하면 특정 폴더로 변경)
+     - ✅ **VIP 같은 특정 폴더만 감시하고 싶다면**: 이 Folder 값을 Inbox 대신 그 폴더로 바꾸기만 하면 됩니다 (폴더 선택창에서 직접 고르면 됨). 다만 이 트리거는 "그 폴더에 메일이 들어오는 순간"을 감지하는 것이라, 사람이 수동으로 메일을 옮기는 경우가 아니라 **Outlook 규칙(Rule)으로 도착 즉시 VIP 폴더로 자동 이동**시켜야 실제로 잡힙니다 (Inbox에 도착한 뒤 한참 지나서 사람이 옮기면 그때 다시 트리거됨 — 즉시 옮기는 규칙을 Outlook에 미리 만들어두는 걸 권장). 전체 메일 로그(4절 원래 목적)와 VIP만 별도로 보고 싶다면, 이 흐름을 통째로 복제해서 하나는 Inbox용, 하나는 VIP용으로 따로 두는 것도 방법입니다.
    - **Include Attachments**: **Yes** (처음부터 첨부파일까지 저장하는 구성이므로 Yes로 설정합니다. 첨부파일이 전혀 필요 없다면 No로 두고 4-1, 4-2 단계를 건너뛰어도 됩니다.)
    - 나머지 필터(From, Subject Filter 등)는 선택 사항. 전체 메일을 다 받고 싶으면 비워둡니다.
    - ⚠️ **이 Folder에 실제로 들어온 메일만 잡힙니다.** 스팸함(Junk Email)으로 자동 분류되거나, Outlook 규칙이 도착 즉시 다른 폴더로 이동시키는 메일은 Inbox를 거치지 않으므로 기록되지 않습니다. 반대로 일단 Inbox에 들어온 뒤 사람이 나중에 삭제/이동한 메일은 이미 기록이 끝난 뒤라 영향 없습니다.
@@ -433,5 +434,30 @@ OneDrive 동기화는 양방향이라, Windows에 동기화된 로컬 `OutlookAt
 ### 10-4. `sync_outlook_digest.log` 자동 로테이션 (구현 완료)
 
 로그가 append 전용이라 계속 커지는 문제를 해결했습니다. `sync_outlook_digest.py`가 매 실행 시작 시 로그 파일 크기가 1MB를 넘으면 `sync_outlook_digest.log.1`로 백업하고 새로 시작합니다 (백업은 하나만 유지, 이전 백업은 덮어씀). 별도 설정 없이 자동으로 동작합니다.
+
+---
+
+## 11. Excel 행 자동 삭제 (1주일만 보관, 설계 — 아직 검증 전)
+
+Jira 연동(10절)과는 무관하게, 그냥 **오래된 행은 무조건 지우는** 더 단순한 정리 흐름입니다. 계속 쌓이기만 하면 4-3절에서 이미 경고한 대로 "Add a row into a table" 성능이 나빠지고, 지금(484행 시점)도 아래 함정에 걸릴 위치입니다.
+
+> ⚠️ **먼저 알아야 할 함정**: `List rows present in a table` 액션은 기본 설정으로는 테이블 행이 많아지면(대략 수백 행 이상) **일부만 가져오고 나머지는 자동으로 잘라버립니다.** 지금(484행)도 이미 이 한도에 걸릴 수 있는 크기입니다. 이 액션을 클릭 → **"Settings"** 탭 → **"Pagination"**을 켜고 **"Threshold"**를 넉넉히(예: `5000`) 설정하세요. 이걸 빼먹으면 정리 흐름이 "오래된 행 몇 개만" 보고 지우고 나머지는 계속 남아있는 것처럼 보이는 혼란스러운 상황이 됩니다.
+
+### 사전 준비: 메일ID 열
+
+행을 정확히 지목해서 지우려면 고유 키가 필요합니다. 아직 안 했다면 10-1절대로 Excel에 **메일ID** 열을 추가하고, 4-3절 "Add a row into a table"에 `Message Id` 매핑을 채워두세요 (Jira 연동을 안 하더라도 이 열은 필요합니다).
+
+### 새 흐름 (별도, 예: `OutlookDigest 오래된 행 정리`)
+
+1. 트리거: `Recurrence` → Interval `1`, Frequency `Day`
+2. `Excel Online (Business)` → **"List rows present in a table"**: File/Table은 4절과 동일. (위 Pagination 설정 꼭 확인)
+3. `Apply to each` (결과 행마다):
+   - `Condition`: 받은시각이 7일보다 오래됐는지 확인 — Expression: `less(item()?['받은시각'], addDays(utcNow(), -7))`
+   - 참이면 `Excel Online (Business)` → **"Delete a row"**: File/Table 동일, **Key Column**: `메일ID`, **Key Value**: 지금 행의 메일ID
+4. Save
+
+> ⚠️ "Delete a row"는 되돌릴 수 없습니다. 처음 실행할 때는 조건을 `addDays(utcNow(), -3650)`처럼 아주 길게 잡아 "Test" 화면에서 삭제 대상이 의도한 것만 걸리는지 먼저 확인한 뒤 7일로 좁히세요.
+
+첨부파일 자체(OneDrive `OutlookAttachments` 폴더)는 이 흐름과 별개로, `sync_outlook_digest.py`가 로컬 동기화 폴더에서 30일 지난 파일을 이미 정리하고 있습니다 (10-4절 위, 실제로는 코드 상단 `ATTACHMENT_MAX_AGE_DAYS` 상수). Excel 행과 같은 7일 기준으로 맞추고 싶다면 그 값을 `7`로 바꾸면 됩니다.
 
 ---
