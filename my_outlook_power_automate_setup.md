@@ -472,10 +472,21 @@ Excel Online (Business) 커넥터가 각 행에 자동으로 붙여주는 내부
 6. `Control` → **"Apply to each"**: 위 5번 Compose의 Outputs 선택 (중첩 없이 이거 하나면 됩니다)
    - `Condition`: 빈 문자열이 아닌지 확인 — Expression `not(empty(items('Apply_to_each')))` (첨부파일 없는 행이 섞여 있으면 빈 문자열이 나올 수 있음)
    - 참이면: `OneDrive for Business` → **"Get file metadata using path"** (File Path = `concat('/OutlookAttachments/', items('Apply_to_each'))`) → **"Delete file"** (File = 그 Id). 파일이 이미 없을 수도 있으니 "Delete file"의 Settings → Run after에 앞 단계의 **"Has failed"도 체크**해두세요.
-7. 지울 행의 키 목록 만들기: `Data Operation` → **"Select"**: From = 3번 Filter array의 출력, Map을 텍스트 모드로 전환 → 값 = `item()?['ItemInternalId']` (B라면 `item()?['메일ID']`)
-8. `Control` → **"Apply to each"** (6번과는 별개의, 역시 중첩 없는 반복): 위 7번 Select의 Outputs 선택
-9. 그 안에 `Excel Online (Business)` → **"Delete a row"**: File/Table 동일, **Key Column**: `ItemInternalId`(B라면 `메일ID`), **Key Value**: `items('Apply_to_each_2')`
-10. Save
+7. 행 삭제 (**A와 B의 방법이 다릅니다** — "Delete a row"는 Key Value가 정확히 일치하는 값을 찾는 기능이라, "비어있는 값"을 찾도록 지정할 방법이 없기 때문입니다):
+
+   **A(ItemInternalId)를 쓴다면 (간단, 이 값은 애초에 비어있을 수 없음)**
+   - `Data Operation` → **"Select"**: From = 3번 Filter array의 출력, Map을 텍스트 모드로 전환 → 값 = `item()?['ItemInternalId']`
+   - `Control` → **"Apply to each"** (6번과는 별개의, 역시 중첩 없는 반복): 위 Select의 Outputs 선택
+   - 그 안에 `Excel Online (Business)` → **"Delete a row"**: **Key Column**: `ItemInternalId`, **Key Value**: `items('Apply_to_each_2')`
+
+   **B(메일ID)를 쓴다면 (메일ID가 비어있는 예전 행은 다른 값으로 대신 지목해야 함)**
+   - `Control` → **"Apply to each"** (6번과는 별개): 이번엔 미리 Select로 뽑지 말고, **3번 Filter array의 출력(행 전체)** 을 그대로 선택
+   - 그 안에 `Control` → **"Condition"**: `not(empty(items('Apply_to_each_2')?['메일ID']))`
+     - **Yes**: `Excel Online (Business)` → **"Delete a row"**: **Key Column**: `메일ID`, **Key Value**: `items('Apply_to_each_2')?['메일ID']`
+     - **No**: 메일ID가 없는 행이므로, 그 안에 다시 `Control` → **"Condition"**: `not(empty(items('Apply_to_each_2')?['받은시각']))`
+       - **Yes**: `Excel Online (Business)` → **"Delete a row"**: **Key Column**: `받은시각`, **Key Value**: `items('Apply_to_each_2')?['받은시각']`
+       - **No**: 메일ID도 받은시각도 둘 다 비어있는 행 — 자동으로 지목할 방법이 없는 아주 오래된 행입니다. 여기는 그냥 비워두고(아무 액션도 없이) 나중에 Excel에서 **수동으로 한 번만** 확인해서 지우세요. 매일 반복되는 흐름을 이런 극소수 예외까지 처리하도록 무리하게 만들 필요는 없습니다.
+8. Save
 
 > ⚠️ "Delete a row"/"Delete file"는 되돌릴 수 없습니다. 처음 실행할 때는 3단계 필터 조건을 `addDays(utcNow(), -3650)`처럼 아주 길게 잡아, 4번 Compose로 지울 대상이 의도한 것만 걸리는지 먼저 확인한 뒤 7일로 좁히세요.
 
