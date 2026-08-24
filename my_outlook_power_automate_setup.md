@@ -443,32 +443,41 @@ Jira 연동(10절)과는 무관하게, 그냥 **오래된 행은 무조건 지�
 
 > ⚠️ **먼저 알아야 할 함정**: `List rows present in a table` 액션은 기본 설정으로는 테이블 행이 많아지면(대략 수백 행 이상) **일부만 가져오고 나머지는 자동으로 잘라버립니다.** 지금(484행)도 이미 이 한도에 걸릴 수 있는 크기입니다. 이 액션을 클릭 → **"Settings"** 탭 → **"Pagination"**을 켜고 **"Threshold"**를 넉넉히(예: `5000`) 설정하세요. 이걸 빼먹으면 정리 흐름이 "오래된 행 몇 개만" 보고 지우고 나머지는 계속 남아있는 것처럼 보이는 혼란스러운 상황이 됩니다.
 
-### 사전 준비: 메일ID 열
+### 사전 준비: 행을 정확히 지목할 키 확인
 
-행을 정확히 지목해서 지우려면 고유 키가 필요합니다. 아직 안 했다면 10-1절대로 Excel에 **메일ID** 열을 추가하고, 4-3절 "Add a row into a table"에 `Message Id` 매핑을 채워두세요 (Jira 연동을 안 하더라도 이 열은 필요합니다).
+행을 정확히 지목해서 지우려면 고유 키가 필요합니다. **A를 먼저 시도**하고, 안 되면 B로 대체하세요.
 
-### 새 흐름 (별도, 예: `OutlookDigest 오래된 행 정리`)
+**A. `ItemInternalId` 사용 (권장, 별도 열 추가 불필요)**
+
+Excel Online (Business) 커넥터가 각 행에 자동으로 붙여주는 내부 식별자입니다. 아래 9단계 "Delete a row" 액션에서 **Key Column** 드롭다운을 열었을 때 받은시각/보낸사람 같은 실제 열 이름들 말고 **`ItemInternalId`**라는 항목이 따로 보이면 이걸 쓰면 됩니다. 행이 생성되는 순간부터 항상 존재하는 값이라 "예전 행이라 값이 비어있는" 문제 자체가 없습니다. ⚠️ 실제로 이 옵션이 보이는지는 커넥터 버전에 따라 다를 수 있으니 화면에서 먼저 확인하세요.
+
+**B. `메일ID` 열 사용 (ItemInternalId가 안 보일 때만)**
+
+10-1절대로 Excel에 **메일ID** 열을 추가하고 4-3절 "Add a row into a table"에 `Message Id` 매핑을 채우세요. 이 방식은 **그 열을 추가하기 전부터 있던 행은 메일ID가 비어있다**는 문제가 있으므로, 아래 3단계 필터 조건에서 "메일ID가 비어있으면(예전 행) 무조건 삭제 대상"도 같이 처리합니다.
+
+### 새 흐름 (별도, 예: `OutlookDigest 오래된 행 정리`) — 지울 대상을 먼저 통째로 계산한 뒤 처리
+
+행마다 도는 반복 안에 조건, 그 안에 다시 반복을 두는 중첩 구조 대신, **"지울 대상 목록"을 먼저 한 번에 뽑아내고 → 그 목록으로 파일 삭제 → 그 목록으로 행 삭제** 순서로 바꾸면 확인하기 더 쉽습니다.
 
 1. 트리거: `Recurrence` → Interval `1`, Frequency `Day`
-2. `Excel Online (Business)` → **"List rows present in a table"**: File/Table은 4절과 동일. (위 Pagination 설정 꼭 확인)
-3. `Apply to each` (결과 행마다):
-   - `Condition`: 받은시각이 7일보다 오래됐는지 확인 — Expression: `less(item()?['받은시각'], addDays(utcNow(), -7))`
-   - **Yes(조건 참)** 분기 — 행을 지우기 **전에** 그 행이 가리키던 첨부파일부터 지웁니다:
-     1. **(디버깅용, 선택)** `Data Operation` → **"Compose"** 추가 → Inputs에 Expression으로 아래처럼 지금 지우려는 행이 정확히 뭔지 한눈에 보이게 만듭니다:
-        ```
-        concat('메일ID=', item()?['메일ID'], ' / 받은시각=', item()?['받은시각'], ' / 첨부파일명=', item()?['첨부파일명'])
-        ```
-        실제로 행을 지우기 전에, "Test"로 한 번 돌려보고 이 Compose 액션을 클릭해서 반복(iteration)마다 어떤 행이 삭제 대상으로 잡혔는지 Outputs로 확인하세요. 의도한 행만 걸리는 게 확인되면, 이 Compose는 지워도 되고 그냥 남겨둬도 흐름 동작에는 지장 없습니다 (기록용으로 남겨두는 것도 방법).
-     2. 첨부파일명 열은 파일이 여러 개면 `, ` (쉼표+공백 — 4-2절 `join(variables('varAttachmentNames'), ', ')`과 동일한 구분자)로 이어져 있습니다. 이걸 나누기 위해 안에 새 `Control` → **"Apply to each"** 추가 (같은 흐름 안에 두 번째로 추가하는 것이라 박스 이름이 자동으로 `Apply to each 2`가 됩니다) → Select an output: Expression으로 `split(item()?['첨부파일명'], ', ')`
-     3. 그 `Apply to each 2` 박스 **안**에 `Control` → **"Condition"** 추가: 지금 항목이 빈 문자열이 아닌지 확인 — Expression: `not(empty(items('Apply_to_each_2')))`
-        - ⚠️ 첨부파일이 없는 행은 첨부파일명이 빈 문자열이고, `split('', ', ')`는 빈 문자열 1개짜리 배열을 반환합니다. 이 Condition이 없으면 `/OutlookAttachments/`라는 존재하지 않는 파일을 지우려다 매번 오류가 납니다.
-        - 참이면:
-          - `OneDrive for Business` → **"Get file metadata using path"**: File Path = Expression `concat('/OutlookAttachments/', items('Apply_to_each_2'))`
-          - `OneDrive for Business` → **"Delete file"**: File = 방금 조회한 metadata 출력의 **Id** (Dynamic content에서 선택). 파일이 이미 없으면(수동으로 지웠거나 한 경우) 앞 단계가 실패할 수 있으니, 이 "Delete file"의 Settings → Run after에 앞 단계의 **"Has failed"도 체크**해서 다음 첨부파일/다음 행 처리가 막히지 않게 하는 걸 권장합니다.
-     4. `Excel Online (Business)` → **"Delete a row"**: File/Table 동일, **Key Column**: `메일ID`, **Key Value**: 지금 행의 메일ID
-4. Save
+2. `Excel Online (Business)` → **"List rows present in a table"**: File/Table은 4절과 동일. (앞서 설명한 Pagination 설정 꼭 확인)
+3. `Data Operation` → **"Filter array"**: From = 위 액션의 **value** (Dynamic content) → 필터 조건을 입력칸 오른쪽의 **"Switch to text mode"**(또는 편집기 우측 상단 토글)로 바꾼 뒤 Expression으로 직접 입력:
+   - A(ItemInternalId)를 쓴다면: `@less(item()?['받은시각'], addDays(utcNow(), -7))`
+   - B(메일ID)를 쓴다면(예전 행도 같이 정리): `@or(less(item()?['받은시각'], addDays(utcNow(), -7)), empty(item()?['메일ID']))`
+   → 결과: 지울 대상 행들만 모인 배열 하나
+4. **(디버깅용, 선택)** `Data Operation` → **"Compose"** 추가 → Inputs = 위 Filter array 액션의 **body** (Dynamic content) 전체. "Test" 실행 후 이 Compose의 Outputs를 열면 **지울 행 전체 목록을 한 번에** 확인할 수 있습니다 (행마다 따로 클릭할 필요 없음).
+5. 첨부파일 목록 만들기:
+   - `Data Operation` → **"Select"**: From = 3번 Filter array의 출력, Map을 텍스트 모드로 전환 → 값 = `item()?['첨부파일명']`
+   - 첨부파일명 한 칸에 여러 파일이 `, ` (4-2절과 동일 구분자)로 이어져 있을 수 있으므로, 다시 합쳤다 쪼개서 평탄화: `Data Operation` → **"Compose"** 추가 → Inputs에 Expression `split(join(body('Select'), ', '), ', ')`
+6. `Control` → **"Apply to each"**: 위 5번 Compose의 Outputs 선택 (중첩 없이 이거 하나면 됩니다)
+   - `Condition`: 빈 문자열이 아닌지 확인 — Expression `not(empty(items('Apply_to_each')))` (첨부파일 없는 행이 섞여 있으면 빈 문자열이 나올 수 있음)
+   - 참이면: `OneDrive for Business` → **"Get file metadata using path"** (File Path = `concat('/OutlookAttachments/', items('Apply_to_each'))`) → **"Delete file"** (File = 그 Id). 파일이 이미 없을 수도 있으니 "Delete file"의 Settings → Run after에 앞 단계의 **"Has failed"도 체크**해두세요.
+7. 지울 행의 키 목록 만들기: `Data Operation` → **"Select"**: From = 3번 Filter array의 출력, Map을 텍스트 모드로 전환 → 값 = `item()?['ItemInternalId']` (B라면 `item()?['메일ID']`)
+8. `Control` → **"Apply to each"** (6번과는 별개의, 역시 중첩 없는 반복): 위 7번 Select의 Outputs 선택
+9. 그 안에 `Excel Online (Business)` → **"Delete a row"**: File/Table 동일, **Key Column**: `ItemInternalId`(B라면 `메일ID`), **Key Value**: `items('Apply_to_each_2')`
+10. Save
 
-> ⚠️ "Delete a row"/"Delete file"는 되돌릴 수 없습니다. 처음 실행할 때는 조건을 `addDays(utcNow(), -3650)`처럼 아주 길게 잡아 "Test" 화면에서 삭제 대상이 의도한 것만 걸리는지 먼저 확인한 뒤 7일로 좁히세요. 위 1번 Compose를 같이 켜두면 "무엇이 왜 지워졌는지"를 실행 기록에서 바로 확인할 수 있어 더 안전합니다.
+> ⚠️ "Delete a row"/"Delete file"는 되돌릴 수 없습니다. 처음 실행할 때는 3단계 필터 조건을 `addDays(utcNow(), -3650)`처럼 아주 길게 잡아, 4번 Compose로 지울 대상이 의도한 것만 걸리는지 먼저 확인한 뒤 7일로 좁히세요.
 
 `sync_outlook_digest.py`의 로컬 30일 첨부파일 정리(코드 상단 `ATTACHMENT_MAX_AGE_DAYS`)는 이 흐름과 별개로 계속 동작합니다 — 위 흐름이 실패하거나 아직 반영 전인 파일을 위한 **보조 안전망**으로 그대로 두는 것을 추천합니다 (필요하면 `7`로 낮춰서 정확히 맞춰도 됩니다).
 
