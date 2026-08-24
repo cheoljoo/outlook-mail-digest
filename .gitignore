@@ -222,3 +222,8 @@ __marimo__/
 
 # /todo-list, /todo-done, /todo-all 실행 결과 덤프 (내용이 길어질 수 있어 git에는 남기지 않음)
 todo/output/
+
+# browser_session: 로그인된 세션으로 캡처한 스크린샷/HTML은 사내 민감정보가 섞일 수 있어 git에 남기지 않음
+# (실제 로그인 세션/쿠키 자체는 저장소 밖 ~/.secure_browser_profile 에 있어 애초에 이 경로에 없음)
+browser_session/.venv/
+browser_session/out/
