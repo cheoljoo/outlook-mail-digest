@@ -227,3 +227,7 @@ todo/output/
 # (실제 로그인 세션/쿠키 자체는 저장소 밖 ~/.secure_browser_profile 에 있어 애초에 이 경로에 없음)
 browser_session/.venv/
 browser_session/out/
+
+# extract_grid.py 등으로 실제 메일 내용을 담아 만든 xlsx (실제 개인정보 포함, git에 남기지 않음)
+/a.xlsx
+*.extracted.xlsx
